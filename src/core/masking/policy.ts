@@ -185,26 +185,36 @@ export function maskBodyText(
   }
 
   // form-urlencoded 처리
-  if (raw.includes('=') && !raw.includes('\n')) {
-    const masked = raw
-      .split('&')
-      .map((pair) => {
-        const eq = pair.indexOf('=');
-        if (eq === -1) return pair;
-        const key = pair.slice(0, eq);
-        const value = pair.slice(eq + 1);
-        const decodedKey = decodeURIComponent(key);
-        if (isSensitiveKey(decodedKey, policy)) {
-          return `${key}=${maskString(decodeURIComponent(value), policy)}`;
-        }
-        return pair;
-      })
-      .join('&');
-    return {
-      masked,
-      raw: policy.revealRaw ? raw : undefined,
-      sensitivity: hasSensitiveSubstring(raw) ? 'high' : 'low',
-    };
+  // Stricter detection: 전체가 `key=val(&key=val)*` 모양이어야 함. 단순히 `=` 가
+  // 들어있다는 이유로 HTML/CSS/base64 body가 이 경로로 떨어지면 decodeURIComponent가
+  // 잘못된 `%xx` escape에서 URIError를 던진다.
+  if (FORM_URLENCODED_PATTERN.test(raw)) {
+    try {
+      const masked = raw
+        .split('&')
+        .map((pair) => {
+          const eq = pair.indexOf('=');
+          if (eq === -1) return pair;
+          const key = pair.slice(0, eq);
+          const value = pair.slice(eq + 1);
+          const decodedKey = safeDecode(key) ?? key;
+          if (isSensitiveKey(decodedKey, policy)) {
+            const decodedValue = safeDecode(value);
+            if (decodedValue !== undefined) {
+              return `${key}=${maskString(decodedValue, policy)}`;
+            }
+          }
+          return pair;
+        })
+        .join('&');
+      return {
+        masked,
+        raw: policy.revealRaw ? raw : undefined,
+        sensitivity: hasSensitiveSubstring(raw) ? 'high' : 'low',
+      };
+    } catch {
+      // 형태는 form-encoded 같았지만 처리 도중 예외 — plain text 로 fallthrough.
+    }
   }
 
   // 그 외: JWT 형태 또는 토큰 형태 휴리스틱
@@ -254,4 +264,19 @@ function hasSensitiveSubstring(raw: string): boolean {
     if (lower.includes(key)) return true;
   }
   return false;
+}
+
+/**
+ * 전체가 `key=val(&key=val)*` 형태인지 검사. HTML/JSON/CSS/base64 body 가 이 경로로
+ * 잘못 들어가서 decodeURIComponent에서 URIError 가 나는 걸 방지한다.
+ */
+const FORM_URLENCODED_PATTERN =
+  /^[^<>{}\n\r=&]+=[^<>{}\n\r&]*(?:&[^<>{}\n\r=&]+=[^<>{}\n\r&]*)*$/;
+
+function safeDecode(value: string): string | undefined {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return undefined;
+  }
 }

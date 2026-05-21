@@ -59,6 +59,7 @@
     "labelRequests": "요청 수",
     "labelAuthCandidates": "인증 후보",
     "stop": "캡처 종료",
+    "stopping": "종료 중…",
     "liveNetwork": "실시간 네트워크",
     "waiting": "트래픽 대기 중…",
     "headerTime": "시각",
@@ -80,6 +81,7 @@
     "cardStorageChanges": "스토리지 변화",
     "noCandidate": "후보 없음",
     "newKeys": "개 키 추가됨",
+    "signalsLabel": "감지된 신호",
     "confidenceLine": "신뢰도: {{score}} ({{level}})",
     "scoreLabel": "점수 {{score}}",
     "securityNotes": "보안 노트",
@@ -87,7 +89,16 @@
     "mermaidPreview": "시퀀스 다이어그램",
     "mermaidHint": "캡처된 흐름을 그대로 렌더링했습니다. Markdown / JSON export에는 소스가 함께 포함됩니다.",
     "requestList": "요청 목록",
-    "viewReport": "리포트 보기"
+    "viewReport": "리포트 보기",
+    "relevant": "관련",
+    "jwtTokens": "JWT 토큰",
+    "jwtCount": "{{count}}건 발견",
+    "timelineCount": "주요 {{shown}}건 · 전체 {{total}}건",
+    "timelineCountAll": "전체 {{count}}건",
+    "requestCount": "관련 {{shown}}건 · 전체 {{total}}건",
+    "requestCountAll": "전체 {{count}}건",
+    "showAllEvents": "전체 {{count}}건 보기",
+    "showAllRequests": "전체 {{count}}건 보기"
   },
   "report": {
     "eyebrow": "리포트",
@@ -97,6 +108,7 @@
     "tabPreview": "미리보기",
     "tabMarkdown": "Markdown",
     "tabJson": "JSON",
+    "compact": "주요 항목만 보기",
     "includeRaw": "원문 값 포함",
     "rawWarning": "⚠ 민감 정보의 원문이 포함됩니다. 권한이 확인된 사람에게만 공유하세요.",
     "rawUnavailable": "로컬 저장소에서 불러온 캡처라 영구 저장 시 원문이 제거되었습니다. 원문을 보려면 새로 캡처하세요."
@@ -161,6 +173,26 @@
     "noTimeline": "타임라인 이벤트가 없습니다.",
     "securityHeading": "보안 노트",
     "noSecurityNotes": "이번 캡처에서 별도로 표시할 보안 노트는 없습니다.",
-    "footer": "{{tool}}은 허가된 시스템 분석 전용입니다. 공유 전에 리포트 내용을 확인하세요."
+    "footer": "{{tool}}은 허가된 시스템 분석 전용입니다. 공유 전에 리포트 내용을 확인하세요.",
+    "jwtHeading": "디코드된 JWT 토큰",
+    "jwtSource": {
+      "request-header": "요청 헤더",
+      "response-header": "응답 헤더",
+      "response-body": "응답 본문",
+      "cookie": "쿠키",
+      "storage-local": "localStorage",
+      "storage-session": "sessionStorage"
+    },
+    "jwtAlgorithm": "알고리즘",
+    "jwtSubject": "Subject (sub)",
+    "jwtIssuer": "Issuer (iss)",
+    "jwtAudience": "Audience (aud)",
+    "jwtIssuedAt": "발행 시각 (iat)",
+    "jwtExpiresAt": "만료 시각 (exp)",
+    "jwtExpired": "만료됨",
+    "jwtNotExpired": "유효",
+    "jwtHeader": "Header",
+    "jwtPayload": "Payload",
+    "jwtSignaturePreview": "Signature (마스킹)"
   }
 }

@@ -3,7 +3,7 @@ import type { Route } from '../state/store.js';
 import { store, useAppState } from '../state/store.js';
 
 const ITEMS: Array<{ id: Route; labelKey: string; icon: string }> = [
-  { id: 'home', labelKey: 'nav.home', icon: '◌' },
+  { id: 'home', labelKey: 'nav.home', icon: '⌂' },
   { id: 'capture', labelKey: 'nav.capture', icon: '◎' },
   { id: 'analysis', labelKey: 'nav.analysis', icon: '⊚' },
   { id: 'report', labelKey: 'nav.reports', icon: '☰' },

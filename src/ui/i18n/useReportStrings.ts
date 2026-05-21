@@ -52,6 +52,26 @@ export function useReportStrings(): ReportStrings {
       securityHeading: t('reportContent.securityHeading'),
       noSecurityNotes: t('reportContent.noSecurityNotes'),
       footer: t('reportContent.footer', { tool }),
+      jwtHeading: t('reportContent.jwtHeading'),
+      jwtSourceLabels: {
+        'request-header': t('reportContent.jwtSource.request-header'),
+        'response-header': t('reportContent.jwtSource.response-header'),
+        'response-body': t('reportContent.jwtSource.response-body'),
+        cookie: t('reportContent.jwtSource.cookie'),
+        'storage-local': t('reportContent.jwtSource.storage-local'),
+        'storage-session': t('reportContent.jwtSource.storage-session'),
+      },
+      jwtAlgorithm: t('reportContent.jwtAlgorithm'),
+      jwtSubject: t('reportContent.jwtSubject'),
+      jwtIssuer: t('reportContent.jwtIssuer'),
+      jwtAudience: t('reportContent.jwtAudience'),
+      jwtIssuedAt: t('reportContent.jwtIssuedAt'),
+      jwtExpiresAt: t('reportContent.jwtExpiresAt'),
+      jwtExpired: t('reportContent.jwtExpired'),
+      jwtNotExpired: t('reportContent.jwtNotExpired'),
+      jwtHeader: t('reportContent.jwtHeader'),
+      jwtPayload: t('reportContent.jwtPayload'),
+      jwtSignaturePreview: t('reportContent.jwtSignaturePreview'),
     };
   }, [t, i18n.language]);
 }

@@ -171,32 +171,36 @@ async function main() {
   // Wait for "stop" command on stdin.
   await waitForStop();
 
-  // Final snapshots.
+  // Final snapshots — each guarded by a timeout so a wedged/closed browser
+  // can never block the `finished` event from being emitted.
   let storage = { localStorage: [], sessionStorage: [] };
   try {
-    storage = await page.evaluate(() => {
-      const dump = (s) => {
-        const out = [];
-        for (let i = 0; i < s.length; i++) {
-          const k = s.key(i);
-          if (k != null) out.push({ key: k, value: s.getItem(k) ?? '' });
-        }
-        return out;
-      };
-      return {
-        localStorage: dump(localStorage),
-        sessionStorage: dump(sessionStorage),
-      };
-    });
-  } catch {
-    /* cross-origin or about:blank — leave empty */
+    storage = await withTimeout(
+      page.evaluate(() => {
+        const dump = (s) => {
+          const out = [];
+          for (let i = 0; i < s.length; i++) {
+            const k = s.key(i);
+            if (k != null) out.push({ key: k, value: s.getItem(k) ?? '' });
+          }
+          return out;
+        };
+        return {
+          localStorage: dump(localStorage),
+          sessionStorage: dump(sessionStorage),
+        };
+      }),
+      5000,
+    );
+  } catch (e) {
+    process.stderr.write(`storage snapshot failed: ${e.message ?? e}\n`);
   }
 
   let cookiesAfter = [];
   try {
-    cookiesAfter = (await context.cookies()).map(toCookieDto);
-  } catch {
-    /* ignore */
+    cookiesAfter = (await withTimeout(context.cookies(), 3000)).map(toCookieDto);
+  } catch (e) {
+    process.stderr.write(`cookie snapshot failed: ${e.message ?? e}\n`);
   }
 
   // Flush the final event before tearing down — process.exit can drop
@@ -216,17 +220,25 @@ async function main() {
   });
 
   try {
-    await context.close();
-  } catch {
-    /* ignore */
+    await withTimeout(context.close(), 5000);
+  } catch (e) {
+    process.stderr.write(`context.close failed: ${e.message ?? e}\n`);
   }
   try {
-    await browser.close();
-  } catch {
-    /* ignore */
+    await withTimeout(browser.close(), 5000);
+  } catch (e) {
+    process.stderr.write(`browser.close failed: ${e.message ?? e}\n`);
   }
-  // Let Node exit naturally — no event loop work left, no need to force exit
-  // (and force-exiting risks losing any remaining stdout).
+  // Give the runtime a tick to actually exit; if not, force-exit. We've already
+  // flushed `finished` above via emitFlush, so this won't truncate output.
+  setTimeout(() => process.exit(0), 250).unref();
+}
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`timeout after ${ms}ms`)), ms)),
+  ]);
 }
 
 function waitForStop() {

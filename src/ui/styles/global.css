@@ -131,9 +131,11 @@ samp {
 
 .main {
   grid-area: main;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--space-8);
   background: var(--color-bg);
+  min-width: 0;
 }
 
 .page-header {
@@ -291,6 +293,9 @@ samp {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--font-sm);
+  /* table-layout: fixed prevents a single long URL from stretching the table
+     past the viewport; column widths are honored and content wraps. */
+  table-layout: fixed;
 }
 .request-list th,
 .request-list td {
@@ -298,6 +303,9 @@ samp {
   text-align: left;
   border-bottom: 1px solid var(--color-border);
   vertical-align: top;
+  /* Long unbroken strings (URLs, query params, tokens) must be allowed to wrap. */
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 .request-list th {
   background: var(--color-bg-deep);
@@ -313,7 +321,23 @@ samp {
 .request-list code {
   font-size: var(--font-xs);
   color: var(--color-text-secondary);
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
+/* Column width hints — only narrow columns are pinned, URL column flexes. */
+.request-list th.col-method,
+.request-list td.col-method { width: 70px; }
+.request-list th.col-status,
+.request-list td.col-status { width: 70px; }
+.request-list th.col-time,
+.request-list td.col-time { width: 96px; }
+.request-list th.col-tags,
+.request-list td.col-tags { width: 110px; }
+.request-list th.col-resource,
+.request-list td.col-resource { width: 96px; }
+.request-list th.col-actions,
+.request-list td.col-actions { width: 200px; }
 
 /* Mermaid preview */
 .mermaid-preview {
@@ -409,6 +433,180 @@ samp {
   color: var(--color-warning);
 }
 
+/* Analysis page hero — diagram + auth summary side-by-side */
+.analysis-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr);
+  gap: var(--space-4);
+  align-items: stretch;
+}
+@media (max-width: 1000px) {
+  .analysis-hero { grid-template-columns: 1fr; }
+}
+.analysis-hero__diagram,
+.analysis-hero__summary {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+}
+.analysis-hero__diagram .mermaid-rendered { padding: var(--space-4); }
+.analysis-hero__authtype {
+  font-size: var(--font-3xl);
+  font-weight: 700;
+  color: var(--color-primary);
+  margin: var(--space-2) 0;
+  text-transform: capitalize;
+}
+.analysis-hero__candidate {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+.analysis-hero__candidate-url {
+  display: block;
+  background: var(--color-bg-deep);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-sm);
+  margin-bottom: var(--space-2);
+  word-break: break-all;
+}
+
+/* Compact metric row */
+.metric-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-6);
+}
+.metric-strip__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.metric-strip__value {
+  font-size: var(--font-xl);
+  font-weight: 600;
+}
+
+.security-notes { padding-left: var(--space-5); }
+.security-notes li { margin: var(--space-2) 0; color: var(--color-text-secondary); }
+
+/* Collapsible <details> sections */
+.disclosure {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-6);
+}
+.disclosure[open] { padding-bottom: var(--space-5); }
+.disclosure > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  user-select: none;
+}
+.disclosure > summary::-webkit-details-marker { display: none; }
+.disclosure > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: var(--space-2);
+  color: var(--color-text-muted);
+  transition: transform 120ms ease;
+}
+.disclosure[open] > summary::before {
+  transform: rotate(90deg);
+}
+.disclosure__title {
+  font-size: var(--font-lg);
+  font-weight: 600;
+  flex: 1;
+}
+
+/* JWT cards */
+.jwt-card {
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+}
+.jwt-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+.jwt-card__label {
+  font-size: var(--font-sm);
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  flex: 1;
+}
+.jwt-claims {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0 0 var(--space-3);
+}
+.jwt-claims__label {
+  color: var(--color-text-muted);
+  font-size: var(--font-sm);
+  margin: 0;
+}
+.jwt-claims__value {
+  margin: 0;
+  font-size: var(--font-sm);
+  color: var(--color-text-primary);
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+.jwt-claims__value.mono {
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
+  color: var(--color-text-secondary);
+}
+.jwt-card__details {
+  margin-top: var(--space-2);
+}
+.jwt-card__details summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+.jwt-card__details summary::-webkit-details-marker { display: none; }
+.jwt-card__details summary::before {
+  content: '▸ ';
+  color: var(--color-text-muted);
+}
+.jwt-card__details[open] summary::before { content: '▾ '; }
+.jwt-json {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  font-size: var(--font-xs);
+  color: var(--color-text-secondary);
+  margin: var(--space-2) 0 0;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
 /* Rendered Mermaid diagram */
 .mermaid-rendered {
   background: var(--color-bg-deep);
@@ -480,14 +678,23 @@ samp {
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   font-size: 0.9em;
+  /* Long URLs/identifiers inside inline code must wrap so they don't push the
+     parent block past the viewport. */
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 .markdown-body pre {
   background: var(--color-bg-deep);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: var(--space-4);
-  overflow: auto;
   font-size: var(--font-sm);
+  /* Preserve formatting but wrap super-long tokens (URLs in JSON, etc.). */
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  overflow-x: auto;
 }
 .markdown-body pre code {
   background: transparent;

@@ -35,6 +35,7 @@ export function ReportPage() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('preview');
   const [includeRaw, setIncludeRaw] = useState(state.settings.revealRawByDefault);
+  const [compact, setCompact] = useState(true);
   const [copied, setCopied] = useState(false);
 
   // Settings.revealRawByDefault가 외부에서 바뀌면 Report 미리보기도 즉시 반영.
@@ -55,12 +56,12 @@ export function ReportPage() {
         flow,
         cookieDiff,
         storageDiff,
-        { includeRaw: effectiveIncludeRaw },
+        { includeRaw: effectiveIncludeRaw, compactTimeline: compact },
         reportStrings,
       ),
       json: stringifyJsonExport(flow, { includeRaw: effectiveIncludeRaw }),
     };
-  }, [flow, effectiveIncludeRaw, reportStrings]);
+  }, [flow, effectiveIncludeRaw, reportStrings, compact]);
 
   if (!flow) {
     return (
@@ -131,6 +132,14 @@ export function ReportPage() {
             </button>
           </div>
           <div className="row" style={{ gap: 'var(--space-3)' }}>
+            <label className="row text-sm" style={{ gap: 'var(--space-2)' }}>
+              <input
+                type="checkbox"
+                checked={compact}
+                onChange={(e) => setCompact(e.target.checked)}
+              />
+              {t('report.compact')}
+            </label>
             <label
               className="row text-sm"
               style={{ gap: 'var(--space-2)', opacity: rawAvailable ? 1 : 0.5 }}

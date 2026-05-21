@@ -55,7 +55,8 @@ export function CapturePage() {
     void store.saveActiveFlow();
   };
 
-  if (state.captureStatus !== 'running' && !state.activeFlow) {
+  const active = state.captureStatus === 'running' || state.captureStatus === 'stopping';
+  if (!active && !state.activeFlow) {
     return (
       <div className="empty-state">
         <p>{t('capture.noActive')}</p>
@@ -114,8 +115,13 @@ export function CapturePage() {
               value={state.captureStats.authCandidateCount}
             />
           </div>
-          <button className="btn btn--danger" onClick={stop}>
-            {t('capture.stop')}
+          <button
+            className="btn btn--danger"
+            onClick={stop}
+            disabled={state.captureStatus === 'stopping'}
+            aria-busy={state.captureStatus === 'stopping'}
+          >
+            {state.captureStatus === 'stopping' ? t('capture.stopping') : t('capture.stop')}
           </button>
         </div>
       </div>
@@ -128,24 +134,24 @@ export function CapturePage() {
           <table className="request-list">
             <thead>
               <tr>
-                <th>{t('capture.headerTime')}</th>
-                <th>{t('capture.headerMethod')}</th>
+                <th className="col-time">{t('capture.headerTime')}</th>
+                <th className="col-method">{t('capture.headerMethod')}</th>
                 <th>{t('capture.headerUrl')}</th>
-                <th>{t('capture.headerStatus')}</th>
-                <th>{t('capture.headerTags')}</th>
+                <th className="col-status">{t('capture.headerStatus')}</th>
+                <th className="col-tags">{t('capture.headerTags')}</th>
               </tr>
             </thead>
             <tbody>
               {state.liveRequests.map((r) => (
                 <tr key={r.id} className={r.isLoginCandidate ? 'is-login' : ''}>
-                  <td className="muted text-xs">{shortTime(r.timestamp)}</td>
-                  <td>
+                  <td className="col-time muted text-xs">{shortTime(r.timestamp)}</td>
+                  <td className="col-method">
                     <span className={`badge badge--${methodClass(r.method)}`}>{r.method}</span>
                   </td>
                   <td>
-                    <code>{r.url}</code>
+                    <code title={r.url}>{r.url}</code>
                   </td>
-                  <td>
+                  <td className="col-status">
                     <span
                       className={`badge ${
                         r.status && r.status >= 400 ? 'badge--danger' : 'badge--success'
@@ -154,7 +160,7 @@ export function CapturePage() {
                       {r.status ?? '—'}
                     </span>
                   </td>
-                  <td>
+                  <td className="col-tags">
                     {r.isLoginCandidate ? (
                       <span className="badge badge--info">{t('capture.loginCandidate')}</span>
                     ) : null}

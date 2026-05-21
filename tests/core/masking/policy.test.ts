@@ -178,6 +178,24 @@ describe('maskBodyText', () => {
     expect(result.sensitivity).toBe('none');
   });
 
+  it('does not crash on HTML body that happens to contain "="', () => {
+    const html = '<!doctype html><html lang="en"><body>x</body></html>';
+    expect(() => maskBodyText(html)).not.toThrow();
+    const result = maskBodyText(html);
+    expect(result.masked).toBe(html);
+  });
+
+  it('does not crash on malformed percent-encoding', () => {
+    // `%xx` not valid hex — would throw if blindly decoded
+    const body = 'callback=%ZZinvalid';
+    expect(() => maskBodyText(body)).not.toThrow();
+  });
+
+  it('does not match base64 in CSS-like body as form-encoded', () => {
+    const body = 'url(data:image/svg+xml;base64,PD94bWw=)';
+    expect(() => maskBodyText(body)).not.toThrow();
+  });
+
   it('handles empty body', () => {
     const result = maskBodyText('');
     expect(result.masked).toBe('');

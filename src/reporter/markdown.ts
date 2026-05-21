@@ -1,5 +1,6 @@
 import { TOOL_NAME, TOOL_VERSION, SCHEMA_VERSION } from '@/core';
-import type { AuthFlow, CookieDiff, StorageDiff } from '@/core';
+import type { AuthEvent, AuthFlow, CookieDiff, StorageDiff } from '@/core';
+import { findJwts, isNoteworthyEvent, type JwtLocation } from '@/analyzer';
 import { generateMermaidDiagram } from './mermaid.js';
 
 export type MarkdownOptions = {
@@ -7,6 +8,11 @@ export type MarkdownOptions = {
   includeRaw?: boolean;
   /** 헤더에 raw 토큰을 절대 포함하지 않음 (강제). */
   enforceMasking?: boolean;
+  /**
+   * Timeline에서 noteworthy 이벤트만 표시할지. 기본 true.
+   * false면 모든 AuthEvent를 timeline에 노출.
+   */
+  compactTimeline?: boolean;
 };
 
 /**
@@ -51,6 +57,19 @@ export type ReportStrings = {
   securityHeading: string;
   noSecurityNotes: string;
   footer: string;
+  jwtHeading: string;
+  jwtSourceLabels: Record<JwtLocation['source'], string>;
+  jwtAlgorithm: string;
+  jwtSubject: string;
+  jwtIssuer: string;
+  jwtAudience: string;
+  jwtIssuedAt: string;
+  jwtExpiresAt: string;
+  jwtExpired: string;
+  jwtNotExpired: string;
+  jwtHeader: string;
+  jwtPayload: string;
+  jwtSignaturePreview: string;
 };
 
 export const DEFAULT_REPORT_STRINGS: ReportStrings = {
@@ -88,6 +107,26 @@ export const DEFAULT_REPORT_STRINGS: ReportStrings = {
   securityHeading: 'Security Notes',
   noSecurityNotes: 'No specific security notes raised for this capture.',
   footer: `${TOOL_NAME} is intended for authorized systems only. Review this report before sharing.`,
+  jwtHeading: 'Decoded JWT tokens',
+  jwtSourceLabels: {
+    'request-header': 'Request header',
+    'response-header': 'Response header',
+    'response-body': 'Response body',
+    cookie: 'Cookie',
+    'storage-local': 'localStorage',
+    'storage-session': 'sessionStorage',
+  },
+  jwtAlgorithm: 'Algorithm',
+  jwtSubject: 'Subject (sub)',
+  jwtIssuer: 'Issuer (iss)',
+  jwtAudience: 'Audience (aud)',
+  jwtIssuedAt: 'Issued at (iat)',
+  jwtExpiresAt: 'Expires (exp)',
+  jwtExpired: 'expired',
+  jwtNotExpired: 'valid',
+  jwtHeader: 'Header',
+  jwtPayload: 'Payload',
+  jwtSignaturePreview: 'Signature (masked)',
 };
 
 export function generateMarkdownReport(
@@ -224,17 +263,69 @@ export function generateMarkdownReport(
   out.push('```');
   out.push('');
 
-  // Timeline
+  // Timeline (compact by default — only noteworthy auth events).
   out.push(`## ${s.timelineHeading}`);
   out.push('');
-  if (flow.steps.length === 0) {
+  const compact = opts.compactTimeline !== false;
+  const shownSteps = compact
+    ? flow.steps.filter((step) => isNoteworthyEvent(step.event as AuthEvent, step.index))
+    : flow.steps;
+  if (shownSteps.length === 0) {
     out.push(`_${s.noTimeline}_`);
   } else {
-    for (const step of flow.steps) {
-      out.push(`${step.index + 1}. **${step.event.type}** — ${step.description}`);
+    let n = 0;
+    for (const step of shownSteps) {
+      n += 1;
+      out.push(`${n}. **${step.event.type}** — ${step.description}`);
+    }
+    if (compact && flow.steps.length > shownSteps.length) {
+      out.push('');
+      out.push(`_+${flow.steps.length - shownSteps.length} additional events omitted._`);
     }
   }
   out.push('');
+
+  // Decoded JWTs — only render section if any tokens were found.
+  const jwts = findJwts(flow);
+  if (jwts.length > 0) {
+    out.push(`## ${s.jwtHeading}`);
+    out.push('');
+    for (const j of jwts) {
+      out.push(`### ${s.jwtSourceLabels[j.source]} — \`${j.label}\``);
+      out.push('');
+      const claims: string[] = [];
+      if (j.decoded.algorithm) claims.push(`- **${s.jwtAlgorithm}:** \`${j.decoded.algorithm}\``);
+      if (typeof j.decoded.payload.sub === 'string')
+        claims.push(`- **${s.jwtSubject}:** \`${j.decoded.payload.sub}\``);
+      if (typeof j.decoded.payload.iss === 'string')
+        claims.push(`- **${s.jwtIssuer}:** \`${j.decoded.payload.iss}\``);
+      if (j.decoded.payload.aud !== undefined)
+        claims.push(`- **${s.jwtAudience}:** \`${JSON.stringify(j.decoded.payload.aud)}\``);
+      if (j.decoded.issuedAt)
+        claims.push(`- **${s.jwtIssuedAt}:** ${j.decoded.issuedAt.toISOString()}`);
+      if (j.decoded.expiresAt) {
+        const status = j.decoded.expired ? s.jwtExpired : s.jwtNotExpired;
+        claims.push(
+          `- **${s.jwtExpiresAt}:** ${j.decoded.expiresAt.toISOString()} _(${status})_`,
+        );
+      }
+      claims.push(`- **${s.jwtSignaturePreview}:** \`${j.decoded.signaturePreview}\``);
+      for (const line of claims) out.push(line);
+      out.push('');
+      out.push(`**${s.jwtHeader}:**`);
+      out.push('');
+      out.push('```json');
+      out.push(JSON.stringify(j.decoded.header, null, 2));
+      out.push('```');
+      out.push('');
+      out.push(`**${s.jwtPayload}:**`);
+      out.push('');
+      out.push('```json');
+      out.push(JSON.stringify(j.decoded.payload, null, 2));
+      out.push('```');
+      out.push('');
+    }
+  }
 
   // Security Notes
   out.push(`## ${s.securityHeading}`);

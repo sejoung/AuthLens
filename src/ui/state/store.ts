@@ -13,7 +13,7 @@ import { buildFlowFromCapture } from '../tauri/sidecar-adapter.js';
 
 export type Route = 'home' | 'capture' | 'analysis' | 'report' | 'settings';
 
-export type CaptureStatus = 'idle' | 'running' | 'analyzing';
+export type CaptureStatus = 'idle' | 'running' | 'stopping' | 'analyzing';
 
 export type AppState = {
   route: Route;
@@ -65,17 +65,32 @@ class Store {
   private listeners = new Set<Listener>();
   private sessionStore = new InMemorySessionStore();
   private finishedSeen = false;
+  private listenerReady?: Promise<void>;
+  private stopTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
     void this.sessionStore.init();
     const ack = readNoticeAck();
     if (ack) this.state = { ...this.state, noticeAcknowledged: true };
-    void this.attachCaptureListener();
+    console.info('[authlens] store init, backendAvailable=', isTauri());
+    this.listenerReady = this.attachCaptureListener();
   }
 
   private async attachCaptureListener() {
-    if (!isTauri()) return;
-    await listenCapture((event) => this.handleCaptureEvent(event));
+    if (!isTauri()) {
+      console.info('[authlens] not in Tauri, skipping capture-event listener');
+      return;
+    }
+    try {
+      const unlisten = await listenCapture((event) => {
+        console.info('[authlens] capture-event:', event.type);
+        this.handleCaptureEvent(event);
+      });
+      console.info('[authlens] capture-event listener attached:', unlisten ? 'ok' : 'no-unlisten-handle');
+    } catch (e) {
+      console.error('[authlens] capture-event listener attach failed:', e);
+      this.setState({ captureError: `Listener attach failed: ${(e as Error).message}` });
+    }
   }
 
   private handleCaptureEvent(event: CaptureEvent) {
@@ -112,11 +127,16 @@ class Store {
       }
       case 'finished': {
         this.finishedSeen = true;
+        if (this.stopTimer) {
+          clearTimeout(this.stopTimer);
+          this.stopTimer = undefined;
+        }
         try {
           const flow = buildFlowFromCapture(event.payload);
           this.setActiveFlow(flow);
           void this.saveActiveFlow();
         } catch (e) {
+          console.error('[authlens] buildFlowFromCapture failed:', e);
           this.setState({
             captureStatus: 'idle',
             captureError: `Failed to build flow from capture: ${(e as Error).message}`,
@@ -133,17 +153,21 @@ class Store {
         console.warn('[sidecar stderr]', event.message);
         return;
       case 'closed':
+        if (this.stopTimer) {
+          clearTimeout(this.stopTimer);
+          this.stopTimer = undefined;
+        }
         // Sidecar process exited. If we never received a `finished` event the
         // capture was cut short (crash, manual browser close, etc.) — surface
         // it explicitly so the user isn't stranded on the Capture screen.
-        if (!this.finishedSeen && this.state.captureStatus === 'running') {
+        if (!this.finishedSeen && this.state.captureStatus !== 'idle') {
           this.setState({
             captureStatus: 'idle',
             captureError:
               this.state.captureError ??
               'Capture ended without a final result. The browser may have closed before analysis ran.',
           });
-        } else if (this.state.captureStatus === 'running') {
+        } else if (this.state.captureStatus === 'running' || this.state.captureStatus === 'stopping') {
           this.setState({ captureStatus: 'idle' });
         }
         return;
@@ -179,6 +203,7 @@ class Store {
    * 브라우저(dev preview)에서는 demo 시뮬레이션으로 fallback.
    */
   startCapture = async (url: string) => {
+    this.finishedSeen = false;
     this.setState({
       route: 'capture',
       targetUrl: url,
@@ -188,12 +213,21 @@ class Store {
       captureError: undefined,
     });
     if (isTauri()) {
+      // Make sure the event listener is up before kicking off the backend,
+      // otherwise early `request`/`started` events can be missed.
+      try {
+        await this.listenerReady;
+      } catch {
+        /* listener errors already surfaced */
+      }
+      console.info('[authlens] invoking start_capture', { url });
       try {
         await startCaptureBackend(url, {
           headful: this.state.settings.headful,
           bodyPreviewLimit: this.state.settings.bodyPreviewLimit,
         });
       } catch (e) {
+        console.error('[authlens] start_capture failed:', e);
         this.setState({
           captureError: (e as Error).message ?? String(e),
           captureStatus: 'idle',
@@ -208,9 +242,26 @@ class Store {
       this.setState({ captureStatus: 'idle' });
       return;
     }
+    this.setState({ captureStatus: 'stopping' });
+    // Fallback: if `finished` never arrives within 30s, give up so the user
+    // isn't stranded on the Capture screen.
+    if (this.stopTimer) clearTimeout(this.stopTimer);
+    this.stopTimer = setTimeout(() => {
+      if (this.state.captureStatus === 'stopping') {
+        console.warn('[authlens] no finished event within 30s — surfacing error');
+        this.setState({
+          captureStatus: 'idle',
+          captureError:
+            'Capture did not produce a result within 30s. The browser may have closed or the sidecar hung.',
+        });
+      }
+    }, 30000);
     try {
+      console.info('[authlens] invoking stop_capture');
       await stopCaptureBackend();
+      console.info('[authlens] stop_capture resolved (waiting for finished event)');
     } catch (e) {
+      console.error('[authlens] stop_capture failed:', e);
       this.setState({
         captureError: (e as Error).message ?? String(e),
         captureStatus: 'idle',

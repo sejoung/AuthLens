@@ -1,10 +1,18 @@
 import type { UnlistenFn } from '@tauri-apps/api/event';
 
 /**
- * Tauri 환경 여부. 브라우저(Vite dev)에서는 false → demo 시뮬레이션 path 사용.
+ * Tauri 환경 여부. `withGlobalTauri: false` 일 때 `__TAURI__`가 없을 수 있어
+ * 여러 marker를 함께 검사한다.
  */
 export function isTauri(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_IPC__' in window;
+  if (typeof window === 'undefined') return false;
+  const w = window as unknown as Record<string, unknown>;
+  return (
+    typeof w.__TAURI_IPC__ === 'function' ||
+    typeof w.__TAURI_INTERNALS__ === 'object' ||
+    typeof w.__TAURI__ === 'object' ||
+    typeof w.__TAURI_METADATA__ === 'object'
+  );
 }
 
 export type CaptureEvent =

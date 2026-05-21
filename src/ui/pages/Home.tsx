@@ -109,20 +109,20 @@ function RecentSessionList() {
         <thead>
           <tr>
             <th>{t('home.headerTarget')}</th>
-            <th>{t('home.headerAuthType')}</th>
-            <th>{t('home.headerStarted')}</th>
-            <th></th>
+            <th className="col-tags">{t('home.headerAuthType')}</th>
+            <th className="col-time">{t('home.headerStarted')}</th>
+            <th className="col-actions"></th>
           </tr>
         </thead>
         <tbody>
           {state.recentSessions.map((s) => (
             <tr key={s.id}>
-              <td>{s.targetUrl}</td>
-              <td>
+              <td title={s.targetUrl}>{s.targetUrl}</td>
+              <td className="col-tags">
                 <span className="badge">{s.authType ?? 'unknown'}</span>
               </td>
-              <td className="muted">{s.startedAt}</td>
-              <td className="row row--end">
+              <td className="col-time muted">{s.startedAt}</td>
+              <td className="col-actions row row--end">
                 <button className="btn btn--secondary" onClick={() => store.loadSession(s.id)}>
                   {t('common.open')}
                 </button>
