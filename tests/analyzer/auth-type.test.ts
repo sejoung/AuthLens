@@ -80,6 +80,37 @@ describe('inferAuthType', () => {
     expect(result.warnings.some((w) => w.message.includes('Secure'))).toBe(true);
   });
 
+  it('classifies http-basic when Basic header is observed', () => {
+    const credentials = Buffer.from('user:pw').toString('base64');
+    const req = makeRequest({
+      url: 'https://api.example.com/protected',
+      headers: makeHeaders({ authorization: `Basic ${credentials}` }),
+    });
+    const result = inferAuthType({
+      targetUrl: 'https://api.example.com/',
+      requests: [req],
+      responses: [],
+      cookieDiff: { added: [], removed: [], changed: [] },
+      storageDiff: diffStorage(EMPTY_STORAGE, EMPTY_STORAGE),
+    });
+    expect(result.authType).toBe('http-basic');
+  });
+
+  it('does not classify as oauth from Bearer-only signal (no authorize/token)', () => {
+    const req = makeRequest({
+      url: 'https://api.example.com/me',
+      headers: makeHeaders({ authorization: 'Bearer eyJh.payload.sig' }),
+    });
+    const result = inferAuthType({
+      targetUrl: 'https://api.example.com/',
+      requests: [req],
+      responses: [],
+      cookieDiff: { added: [], removed: [], changed: [] },
+      storageDiff: diffStorage(EMPTY_STORAGE, EMPTY_STORAGE),
+    });
+    expect(result.authType).not.toBe('oauth');
+  });
+
   it('falls back to unknown when no signals', () => {
     const result = inferAuthType({
       targetUrl: 'https://app.example.com/',

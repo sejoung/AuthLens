@@ -217,6 +217,66 @@ describe('findOAuthFlow — token endpoint', () => {
     expect(info.tokenExchanges).toHaveLength(0);
   });
 
+  it('detects OAuth callback URL (?code=...&state=...)', () => {
+    const info = findOAuthFlow(
+      flowOf({
+        requests: [
+          {
+            id: 'r1',
+            url: 'https://app.example.com/cb?code=abc&state=xyz',
+            method: 'GET',
+            headers: maskHeaders({}),
+            resourceType: 'document',
+            timestamp: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    expect(info.callbacks).toHaveLength(1);
+    expect(info.callbacks[0]?.hasCode).toBe(true);
+    expect(info.callbacks[0]?.hasState).toBe(true);
+  });
+
+  it('detects Bearer header usage and distinguishes JWT shape', () => {
+    const info = findOAuthFlow(
+      flowOf({
+        requests: [
+          {
+            id: 'r1',
+            url: 'https://api.example.com/me',
+            method: 'GET',
+            headers: maskHeaders({ authorization: 'Bearer eyJhbGciOi.payload.sig' }),
+            resourceType: 'fetch',
+            timestamp: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    expect(info.bearerUsages).toHaveLength(1);
+    expect(info.bearerUsages[0]?.tokenLooksLikeJwt).toBe(true);
+  });
+
+  it('detects HTTP Basic and extracts username (not password)', () => {
+    const credentials = Buffer.from('admin:s3cret!').toString('base64');
+    const info = findOAuthFlow(
+      flowOf({
+        requests: [
+          {
+            id: 'r1',
+            url: 'https://api.example.com/private',
+            method: 'GET',
+            headers: maskHeaders({ authorization: `Basic ${credentials}` }),
+            resourceType: 'fetch',
+            timestamp: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    expect(info.basicAuthUsages).toHaveLength(1);
+    expect(info.basicAuthUsages[0]?.username).toBe('admin');
+    expect(info.bearerUsages).toHaveLength(0);
+  });
+
   it('handles JSON-body token request (RFC 6749 §4.1.3 alt)', () => {
     const reqBody = JSON.stringify({ grant_type: 'refresh_token', refresh_token: 'rt-1' });
     const resBody = JSON.stringify({ access_token: 'eyJ.x.y', token_type: 'Bearer', expires_in: 600 });

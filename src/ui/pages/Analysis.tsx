@@ -8,8 +8,11 @@ import {
   filterNoteworthyEvents,
   findJwts,
   findOAuthFlow,
+  type BasicAuthUsage,
+  type BearerUsage,
   type JwtLocation,
   type OAuthAuthorizeRequest,
+  type OAuthCallback,
   type OAuthTokenExchange,
   type ResourceGroup,
 } from '@/analyzer';
@@ -52,9 +55,23 @@ export function AnalysisPage() {
   );
   const jwts = useMemo(() => (flow ? findJwts(flow) : []), [flow]);
   const oauth = useMemo(
-    () => (flow ? findOAuthFlow(flow) : { authorizeRequests: [], tokenExchanges: [] }),
+    () =>
+      flow
+        ? findOAuthFlow(flow)
+        : {
+            authorizeRequests: [],
+            tokenExchanges: [],
+            callbacks: [],
+            bearerUsages: [],
+            basicAuthUsages: [],
+          },
     [flow],
   );
+  const hasOAuthSection =
+    oauth.authorizeRequests.length > 0 ||
+    oauth.tokenExchanges.length > 0 ||
+    oauth.callbacks.length > 0 ||
+    oauth.bearerUsages.length > 0;
 
   if (!flow) {
     return (
@@ -170,14 +187,16 @@ export function AnalysisPage() {
         </div>
       )}
 
-      {(oauth.authorizeRequests.length > 0 || oauth.tokenExchanges.length > 0) && (
+      {hasOAuthSection && (
         <details className="disclosure">
           <summary>
             <span className="disclosure__title">{t('analysis.oauthFlow')}</span>
             <span className="muted text-xs">
-              {t('analysis.oauthCount', {
+              {t('analysis.oauthCount2', {
                 authorize: oauth.authorizeRequests.length,
                 tokens: oauth.tokenExchanges.length,
+                callbacks: oauth.callbacks.length,
+                bearers: oauth.bearerUsages.length,
               })}
             </span>
           </summary>
@@ -188,6 +207,22 @@ export function AnalysisPage() {
             {oauth.tokenExchanges.map((e, i) => (
               <OAuthTokenCard key={`t-${i}`} exchange={e} />
             ))}
+            {oauth.callbacks.length > 0 && <OAuthCallbackCard callbacks={oauth.callbacks} />}
+            {oauth.bearerUsages.length > 0 && <BearerUsageCard usages={oauth.bearerUsages} />}
+          </div>
+        </details>
+      )}
+
+      {oauth.basicAuthUsages.length > 0 && (
+        <details className="disclosure">
+          <summary>
+            <span className="disclosure__title">{t('analysis.httpBasic')}</span>
+            <span className="muted text-xs">
+              {t('analysis.basicCount', { count: oauth.basicAuthUsages.length })}
+            </span>
+          </summary>
+          <div className="stack" style={{ gap: 'var(--space-4)', marginTop: 'var(--space-3)' }}>
+            <BasicAuthCard usages={oauth.basicAuthUsages} />
           </div>
         </details>
       )}
@@ -473,6 +508,105 @@ function OAuthTokenCard({ exchange }: { exchange: OAuthTokenExchange }) {
           value={e.hasIdToken ? t('reportContent.oauthYes') : t('reportContent.oauthNo')}
         />
       </dl>
+    </div>
+  );
+}
+
+function OAuthCallbackCard({ callbacks }: { callbacks: OAuthCallback[] }) {
+  const { t } = useTranslation();
+  return (
+    <div className="jwt-card">
+      <div className="jwt-card__head">
+        <span className="badge badge--info">{t('analysis.oauthCallback')}</span>
+        <span className="muted text-xs">{callbacks.length}</span>
+      </div>
+      <ul className="stack" style={{ gap: 'var(--space-2)', paddingLeft: 'var(--space-5)' }}>
+        {callbacks.map((c, i) => (
+          <li key={i} className="text-sm">
+            <code>{c.host}</code>{' '}
+            <span className="muted text-xs">
+              {c.hasCode && 'code'} {c.hasState && '· state'}{' '}
+              {c.hasError && (
+                <span style={{ color: 'var(--color-danger)' }}>
+                  · error={c.errorCode ?? '?'}
+                </span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function BearerUsageCard({ usages }: { usages: BearerUsage[] }) {
+  const { t } = useTranslation();
+  const jwtCount = usages.filter((u) => u.tokenLooksLikeJwt).length;
+  return (
+    <div className="jwt-card">
+      <div className="jwt-card__head">
+        <span className="badge badge--success">{t('analysis.bearerUsage')}</span>
+        <span className="muted text-xs">
+          {t('analysis.bearerCount', { count: usages.length, jwt: jwtCount })}
+        </span>
+      </div>
+      <ul className="stack" style={{ gap: 'var(--space-1)', paddingLeft: 'var(--space-5)' }}>
+        {usages.slice(0, 10).map((u, i) => (
+          <li key={i} className="text-sm">
+            <span className={`badge badge--${u.method.toUpperCase() === 'GET' ? 'get' : 'post'}`}>
+              {u.method}
+            </span>{' '}
+            <code>{pathOf(u.url)}</code>
+          </li>
+        ))}
+        {usages.length > 10 && (
+          <li className="muted text-xs">
+            {t('analysis.bearerMore', { count: usages.length - 10 })}
+          </li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
+function BasicAuthCard({ usages }: { usages: BasicAuthUsage[] }) {
+  const { t } = useTranslation();
+  const usernames = Array.from(
+    new Set(usages.map((u) => u.username).filter((x): x is string => !!x)),
+  );
+  return (
+    <div className="jwt-card">
+      <div className="jwt-card__head">
+        <span className="badge badge--warning">{t('analysis.basicAuth')}</span>
+        <span className="muted text-xs">
+          {t('analysis.basicCount', { count: usages.length })}
+        </span>
+      </div>
+      <p className="text-sm muted" style={{ marginTop: 0 }}>
+        {t('analysis.basicDescription')}
+      </p>
+      {usernames.length > 0 && (
+        <dl className="jwt-claims">
+          <Claim
+            label={t('analysis.basicUsername')}
+            value={usernames.join(', ')}
+            mono
+          />
+        </dl>
+      )}
+      <ul
+        className="stack"
+        style={{ gap: 'var(--space-1)', paddingLeft: 'var(--space-5)', marginTop: 'var(--space-2)' }}
+      >
+        {usages.slice(0, 5).map((u, i) => (
+          <li key={i} className="text-sm">
+            <span className={`badge badge--${u.method.toUpperCase() === 'GET' ? 'get' : 'post'}`}>
+              {u.method}
+            </span>{' '}
+            <code>{pathOf(u.url)}</code>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

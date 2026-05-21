@@ -10,6 +10,8 @@ import type {
   SecurityNote,
   StorageDiff,
 } from '@/core';
+import { authScheme, findAuthorizationHeader } from './auth-headers.js';
+import { looksLikeAuthorizeRequest, looksLikeTokenRequest } from './oauth-flow.js';
 
 export type InferenceInput = {
   requests: RequestRecord[];
@@ -131,27 +133,53 @@ function detectCsrf(input: InferenceInput): AuthSignal[] {
 
 function detectOAuthOidc(input: InferenceInput): AuthSignal[] {
   const signals: AuthSignal[] = [];
-  const params = ['response_type', 'client_id', 'redirect_uri', 'state', 'code', 'scope'];
+
   for (const req of input.requests) {
-    const url = req.url.toLowerCase();
-    if (url.includes('/authorize') || url.includes('/oauth')) {
-      const hits = params.filter((p) => url.includes(p + '='));
-      if (hits.length >= 2) {
+    if (looksLikeAuthorizeRequest(req.url)) {
+      signals.push({
+        kind: 'oauth.authorize-endpoint',
+        description: 'OAuth authorize endpoint observed (response_type + client_id)',
+        weight: 35,
+      });
+    }
+    if (req.method.toUpperCase() === 'POST') {
+      const body = req.postData?.raw ?? req.postData?.masked ?? '';
+      if (looksLikeTokenRequest(req.url, body)) {
         signals.push({
-          kind: 'oauth.authorize-endpoint',
-          description: `OAuth authorize endpoint with params: ${hits.join(', ')}`,
-          weight: 35,
+          kind: 'oauth.token-endpoint',
+          description: 'POST to token endpoint (grant_type)',
+          weight: 30,
         });
       }
     }
-    if (url.includes('/token') && req.method.toUpperCase() === 'POST') {
-      signals.push({
-        kind: 'oauth.token-endpoint',
-        description: 'POST to token endpoint',
-        weight: 25,
-      });
+    // OAuth callback URL — weaker signal alone (could be just a redirect target).
+    try {
+      const u = new URL(req.url);
+      if (u.searchParams.has('code') && u.searchParams.has('state')) {
+        signals.push({
+          kind: 'oauth.callback',
+          description: 'OAuth callback (code + state) observed',
+          weight: 15,
+        });
+      }
+    } catch {
+      /* ignore */
     }
   }
+
+  // Bearer header usage — supports OAuth-style auth but isn't sufficient alone.
+  for (const req of input.requests) {
+    const auth = findAuthorizationHeader(req.headers);
+    if (auth && authScheme(auth) === 'bearer') {
+      signals.push({
+        kind: 'oauth.bearer-usage',
+        description: 'Bearer token used in Authorization header',
+        weight: 10,
+      });
+      break;
+    }
+  }
+
   for (const res of input.responses) {
     if (res.bodyPreview?.masked && /id_token/i.test(res.bodyPreview.masked)) {
       signals.push({
@@ -163,6 +191,22 @@ function detectOAuthOidc(input: InferenceInput): AuthSignal[] {
     }
   }
   return signals;
+}
+
+function detectHttpBasic(input: InferenceInput): AuthSignal[] {
+  for (const req of input.requests) {
+    const auth = findAuthorizationHeader(req.headers);
+    if (auth && authScheme(auth) === 'basic') {
+      return [
+        {
+          kind: 'http-basic.header',
+          description: 'HTTP Basic Authorization header observed',
+          weight: 50,
+        },
+      ];
+    }
+  }
+  return [];
 }
 
 function detectSso(input: InferenceInput): AuthSignal[] {
@@ -217,6 +261,7 @@ export function inferAuthType(input: InferenceInput): InferenceResult {
   const csrfSignals = detectCsrf(input);
   const oauthSignals = detectOAuthOidc(input);
   const ssoSignals = detectSso(input);
+  const basicSignals = detectHttpBasic(input);
 
   const weightOf = (sigs: AuthSignal[]) =>
     sigs.reduce((acc, s) => acc + s.weight, 0);
@@ -225,14 +270,28 @@ export function inferAuthType(input: InferenceInput): InferenceResult {
   const ssoWeight = weightOf(ssoSignals);
   const cookieWeight = weightOf(cookieSignals);
   const jwtWeight = weightOf(jwtSignals);
+  const basicWeight = weightOf(basicSignals);
+
+  // Tighter OAuth check — require at least an authorize endpoint OR a token
+  // exchange OR id_token. Bearer-usage alone is not enough to classify as OAuth
+  // (could be any token-based API like personal access tokens).
+  const hasStrongOAuthSignal = oauthSignals.some(
+    (s) =>
+      s.kind === 'oauth.authorize-endpoint' ||
+      s.kind === 'oauth.token-endpoint' ||
+      s.kind === 'oidc.id-token',
+  );
 
   let authType: AuthType = 'unknown';
   let confidence = 0;
-  // OIDC > OAuth > SSO > Cookie/JWT 우선순위
-  if (oauthSignals.some((s) => s.kind === 'oidc.id-token')) {
+  // HTTP Basic > OIDC > OAuth > SSO > JWT > Cookie 우선순위
+  if (basicWeight > 0) {
+    authType = 'http-basic';
+    confidence = basicWeight;
+  } else if (oauthSignals.some((s) => s.kind === 'oidc.id-token')) {
     authType = 'oidc';
     confidence = oauthWeight + 10;
-  } else if (oauthWeight >= 35) {
+  } else if (hasStrongOAuthSignal && oauthWeight >= 35) {
     authType = 'oauth';
     confidence = oauthWeight;
   } else if (ssoWeight > 0 && (cookieWeight > 0 || jwtWeight > 0)) {
@@ -252,6 +311,7 @@ export function inferAuthType(input: InferenceInput): InferenceResult {
     ...csrfSignals,
     ...oauthSignals,
     ...ssoSignals,
+    ...basicSignals,
   ];
 
   const warnings: SecurityNote[] = [];

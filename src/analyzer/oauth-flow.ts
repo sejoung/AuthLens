@@ -8,7 +8,8 @@
  * 토큰 자체의 raw 값은 가공하지 않는다 — JWT는 `findJwts`가 이미 따로 잡는다.
  */
 
-import type { AuthFlow } from '@/core';
+import { looksLikeJwt, type AuthFlow } from '@/core';
+import { authScheme, decodeBasicUsername, findAuthorizationHeader } from './auth-headers.js';
 
 export type OAuthAuthorizeRequest = {
   requestId: string;
@@ -47,9 +48,40 @@ export type OAuthTokenExchange = {
   status?: number;
 };
 
+export type OAuthCallback = {
+  requestId: string;
+  url: string;
+  host: string;
+  hasCode: boolean;
+  hasState: boolean;
+  hasError: boolean;
+  errorCode?: string;
+};
+
+export type BearerUsage = {
+  requestId: string;
+  url: string;
+  method: string;
+  /** masked로만 판단했으면 (raw 없음) true. */
+  inferredFromMaskOnly: boolean;
+  /** raw가 있고 JWT 형태로 보이면 true. */
+  tokenLooksLikeJwt: boolean;
+};
+
+export type BasicAuthUsage = {
+  requestId: string;
+  url: string;
+  method: string;
+  /** raw가 있을 때 decoded username (password는 절대 노출 안 함). */
+  username?: string;
+};
+
 export type OAuthFlowInfo = {
   authorizeRequests: OAuthAuthorizeRequest[];
   tokenExchanges: OAuthTokenExchange[];
+  callbacks: OAuthCallback[];
+  bearerUsages: BearerUsage[];
+  basicAuthUsages: BasicAuthUsage[];
 };
 
 // 표준 path 외에도 Google `/o/oauth2/v2/auth`, IdentityServer `/connect/authorize`,
@@ -76,12 +108,43 @@ const TOKEN_PATH_HINTS = [
 export function findOAuthFlow(flow: AuthFlow): OAuthFlowInfo {
   const authorizeRequests: OAuthAuthorizeRequest[] = [];
   const tokenExchanges: OAuthTokenExchange[] = [];
+  const callbacks: OAuthCallback[] = [];
+  const bearerUsages: BearerUsage[] = [];
+  const basicAuthUsages: BasicAuthUsage[] = [];
 
   for (const req of flow.requests) {
     if (looksLikeAuthorizeRequest(req.url)) {
       const parsed = parseAuthorizeRequest(req.id, req.url);
       if (parsed) authorizeRequests.push(parsed);
     }
+    // OAuth callback (redirect_uri 도착): `?code=...&state=...` 또는 에러 응답
+    const cb = parseCallback(req.id, req.url);
+    if (cb) callbacks.push(cb);
+
+    // Authorization 헤더 분석
+    const authHeader = findAuthorizationHeader(req.headers);
+    if (authHeader) {
+      const scheme = authScheme(authHeader);
+      if (scheme === 'bearer') {
+        const raw = authHeader.raw;
+        const token = raw?.replace(/^bearer\s+/i, '') ?? '';
+        bearerUsages.push({
+          requestId: req.id,
+          url: req.url,
+          method: req.method,
+          inferredFromMaskOnly: !raw,
+          tokenLooksLikeJwt: token ? looksLikeJwt(token) : false,
+        });
+      } else if (scheme === 'basic') {
+        basicAuthUsages.push({
+          requestId: req.id,
+          url: req.url,
+          method: req.method,
+          username: decodeBasicUsername(authHeader),
+        });
+      }
+    }
+
     const reqBody = req.postData?.raw ?? '';
     if (req.method.toUpperCase() === 'POST' && looksLikeTokenRequest(req.url, reqBody)) {
       const res = flow.responses.find((r) => r.requestId === req.id);
@@ -113,7 +176,30 @@ export function findOAuthFlow(flow: AuthFlow): OAuthFlowInfo {
     }
   }
 
-  return { authorizeRequests, tokenExchanges };
+  return { authorizeRequests, tokenExchanges, callbacks, bearerUsages, basicAuthUsages };
+}
+
+function parseCallback(requestId: string, url: string): OAuthCallback | undefined {
+  try {
+    const u = new URL(url);
+    const hasCode = u.searchParams.has('code');
+    const hasState = u.searchParams.has('state');
+    const hasError = u.searchParams.has('error');
+    if (!hasCode && !hasError) return undefined;
+    // 보통 OAuth callback은 code+state 둘 다 있음. error는 단독으로도.
+    if (hasCode && !hasState && !hasError) return undefined; // 너무 약함
+    return {
+      requestId,
+      url,
+      host: u.host,
+      hasCode,
+      hasState,
+      hasError,
+      errorCode: u.searchParams.get('error') ?? undefined,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -121,7 +207,7 @@ export function findOAuthFlow(flow: AuthFlow): OAuthFlowInfo {
  *   1. path가 알려진 패턴으로 끝나거나
  *   2. query에 `response_type`과 `client_id`가 모두 있음 (RFC 6749 §4.1.1)
  */
-function looksLikeAuthorizeRequest(url: string): boolean {
+export function looksLikeAuthorizeRequest(url: string): boolean {
   let u: URL;
   try {
     u = new URL(url);
@@ -139,7 +225,7 @@ function looksLikeAuthorizeRequest(url: string): boolean {
  *   1. path가 알려진 패턴으로 끝나거나
  *   2. 요청 본문에 `grant_type` 이 있음 (RFC 6749 §4.1.3 등 공통 요구)
  */
-function looksLikeTokenRequest(url: string, body: string): boolean {
+export function looksLikeTokenRequest(url: string, body: string): boolean {
   try {
     const p = new URL(url).pathname.toLowerCase();
     if (TOKEN_PATH_HINTS.some((pat) => p === pat || p.endsWith(pat))) return true;

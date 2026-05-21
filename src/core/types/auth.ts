@@ -7,6 +7,7 @@ export type AuthType =
   | 'oauth'
   | 'oidc'
   | 'sso'
+  | 'http-basic'
   | 'unknown';
 
 export type ConfidenceLevel = 'low' | 'medium' | 'high';
