@@ -88,9 +88,14 @@ export function HomePage() {
             <button className="btn btn--primary" onClick={() => submit('capture')}>
               {t('home.startCapture')}
             </button>
-            <button className="btn btn--secondary" onClick={() => submit('demo')}>
-              {t('home.openDemo')}
-            </button>
+            {/* Demo is only useful in browser preview mode where the real
+                Playwright backend isn't available. In Tauri builds users
+                should always do a real capture. */}
+            {!state.backendAvailable && (
+              <button className="btn btn--secondary" onClick={() => submit('demo')}>
+                {t('home.openDemo')}
+              </button>
+            )}
           </div>
         </div>
       </div>
