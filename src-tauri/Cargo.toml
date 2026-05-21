@@ -1,0 +1,18 @@
+[package]
+name = "authlens"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Visualize and document authentication flows for authorized web applications."
+
+[build-dependencies]
+tauri-build = { version = "1.5", features = [] }
+
+[dependencies]
+tauri = { version = "1.5", features = ["dialog-save"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

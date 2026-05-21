@@ -1,0 +1,11 @@
+{
+  "name": "@authlens/example-cookie-session",
+  "version": "0.1.0-dev",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "description": "Tiny demo app that authenticates with a cookie-session flow. Safe credentials only.",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
