@@ -6,8 +6,12 @@ import { createDemoAuthFlow } from '../demo/sampleFlow.js';
 export function CapturePage() {
   const state = useAppState();
   const { t } = useTranslation();
+  const backend = state.backendAvailable;
 
+  // In browser-only preview (no Tauri backend), we keep the simulated stream so the
+  // UI stays functional. In a Tauri build the real Playwright sidecar drives state.
   useEffect(() => {
+    if (backend) return; // real backend will emit events
     if (state.captureStatus !== 'running') return;
     let cancelled = false;
     const interval = setInterval(() => {
@@ -36,9 +40,13 @@ export function CapturePage() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [state.captureStatus, state.targetUrl, state.liveRequests.length]);
+  }, [backend, state.captureStatus, state.targetUrl, state.liveRequests.length]);
 
-  const stop = () => {
+  const stop = async () => {
+    if (backend) {
+      await store.requestStopCapture();
+      return;
+    }
     store.stopCapture();
     const flow = createDemoAuthFlow(state.targetUrl, {
       revealRaw: state.settings.revealRawByDefault,
@@ -63,8 +71,35 @@ export function CapturePage() {
       <header className="page-header">
         <span className="page-header__eyebrow">{t('capture.eyebrow')}</span>
         <h1 className="page-header__title">{t('capture.title')}</h1>
-        <p className="page-header__lede">{t('capture.lede')}</p>
+        <p className="page-header__lede">
+          {backend ? t('capture.ledeBackend') : t('capture.ledePreview')}
+        </p>
       </header>
+
+      {!backend && (
+        <div className="notice-banner" role="note">
+          <span aria-hidden="true">◎</span>
+          <div>
+            <div className="notice-banner__title">{t('capture.previewTitle')}</div>
+            <p className="notice-banner__body">{t('capture.previewBody')}</p>
+          </div>
+        </div>
+      )}
+      {backend && (
+        <div className="notice-banner" role="note">
+          <span aria-hidden="true">◎</span>
+          <div>
+            <div className="notice-banner__title">{t('capture.backendTitle')}</div>
+            <p className="notice-banner__body">{t('capture.backendBody')}</p>
+          </div>
+        </div>
+      )}
+
+      {state.captureError && (
+        <div className="reveal-warning" role="alert">
+          {state.captureError}
+        </div>
+      )}
 
       <div className="card">
         <div className="row row--between">

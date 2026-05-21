@@ -1,8 +1,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod capture;
+
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![authlens_version])
+        .manage(capture::CaptureState::default())
+        .invoke_handler(tauri::generate_handler![
+            authlens_version,
+            capture::start_capture,
+            capture::stop_capture,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running AuthLens");
 }
