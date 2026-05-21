@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { diffCookies, diffStorage, flowContainsRaw } from '@/analyzer';
-import { generateMarkdownReport, stringifyJsonExport } from '@/reporter';
+import { generateMarkdownReport, stringifyJsonExport, stringifyPostmanCollection } from '@/reporter';
 import { store, useAppState } from '../state/store.js';
 import { MarkdownPreview } from '../components/MarkdownPreview.js';
 import { useReportStrings } from '../i18n/useReportStrings.js';
@@ -65,6 +65,18 @@ export function ReportPage() {
     } catch {
       // fallback: select text
     }
+  };
+
+  const downloadPostman = () => {
+    if (!flow) return;
+    const json = stringifyPostmanCollection(flow, { includeRaw: effectiveIncludeRaw });
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'authlens-collection.postman_collection.json';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const download = () => {
@@ -136,6 +148,9 @@ export function ReportPage() {
             </button>
             <button className="btn btn--primary" onClick={download}>
               {t('common.download')} {currentFormat === 'md' ? '.md' : '.json'}
+            </button>
+            <button className="btn btn--secondary" onClick={downloadPostman}>
+              {t('analysis.downloadPostman')}
             </button>
           </div>
         </div>

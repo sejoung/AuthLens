@@ -9,3 +9,6 @@ export * from './jwt-locations.js';
 export * from './oauth-flow.js';
 export * from './login-credentials.js';
 export * from './raw-presence.js';
+export * from './discovered-endpoints.js';
+export * from './logout.js';
+export * from './login-form.js';

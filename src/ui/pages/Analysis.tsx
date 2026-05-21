@@ -5,22 +5,29 @@ import {
   countByResourceGroup,
   diffCookies,
   diffStorage,
+  discoverEndpoints,
   displaySensitive,
   filterByResourceGroup,
   filterNoteworthyEvents,
   findJwts,
+  findLoginForm,
+  findLogoutEndpoints,
   findOAuthFlow,
   flowContainsRaw,
   hasAnyCredential,
   type BasicAuthUsage,
   type BearerUsage,
+  type DiscoveredEndpoint,
   type JwtLocation,
   type LoginCredentials,
+  type LoginFormAnalysis,
+  type LogoutEndpoint,
   type OAuthAuthorizeRequest,
   type OAuthCallback,
   type OAuthTokenExchange,
   type ResourceGroup,
 } from '@/analyzer';
+import { stringifyPostmanCollection, toCurlCommand } from '@/reporter';
 import type { RequestRecord, ResponseRecord } from '@/core';
 import { generateMermaidDiagram } from '@/reporter';
 import { store, useAppState } from '../state/store.js';
@@ -69,6 +76,9 @@ export function AnalysisPage() {
     [flow, requestFilter],
   );
   const jwts = useMemo(() => (flow ? findJwts(flow) : []), [flow]);
+  const endpoints = useMemo(() => (flow ? discoverEndpoints(flow) : []), [flow]);
+  const loginForm = useMemo(() => (flow ? findLoginForm(flow) : undefined), [flow]);
+  const logouts = useMemo(() => (flow ? findLogoutEndpoints(flow) : []), [flow]);
   const oauth = useMemo(
     () =>
       flow
@@ -200,6 +210,45 @@ export function AnalysisPage() {
           value={summary?.detectedSignals.length ?? 0}
         />
       </div>
+
+      {endpoints.length > 0 && (
+        <details className="disclosure">
+          <summary>
+            <span className="disclosure__title">{t('analysis.discoveredApi')}</span>
+            <span className="muted text-xs">
+              {t('analysis.discoveredApiCount', {
+                count: endpoints.length,
+                authenticated: endpoints.filter((e) => e.authenticated).length,
+              })}
+            </span>
+          </summary>
+          <DiscoveredEndpointsCard flow={flow} endpoints={endpoints} showRaw={showRaw} />
+        </details>
+      )}
+
+      {loginForm && (
+        <details className="disclosure">
+          <summary>
+            <span className="disclosure__title">{t('analysis.loginForm')}</span>
+            <span className="muted text-xs">
+              {loginForm.method} {loginForm.action ?? '(inline)'}
+            </span>
+          </summary>
+          <LoginFormCard form={loginForm} />
+        </details>
+      )}
+
+      {logouts.length > 0 && (
+        <details className="disclosure">
+          <summary>
+            <span className="disclosure__title">{t('analysis.logout')}</span>
+            <span className="muted text-xs">
+              {t('analysis.logoutCount', { count: logouts.length })}
+            </span>
+          </summary>
+          <LogoutCard items={logouts} />
+        </details>
+      )}
 
       {topCandidate && (() => {
         const loginReq = flow.requests.find((r) => r.id === topCandidate.requestId);
@@ -561,6 +610,188 @@ function OAuthTokenCard({ exchange }: { exchange: OAuthTokenExchange }) {
         />
       </dl>
     </div>
+  );
+}
+
+function DiscoveredEndpointsCard({
+  flow,
+  endpoints,
+  showRaw,
+}: {
+  flow: ReturnType<typeof useAppState>['activeFlow'];
+  endpoints: DiscoveredEndpoint[];
+  showRaw: boolean;
+}) {
+  const { t } = useTranslation();
+  const [copiedFor, setCopiedFor] = useState<string | undefined>();
+
+  const copyCurl = async (req: RequestRecord) => {
+    const cmd = toCurlCommand(req, { includeRaw: showRaw });
+    try {
+      await navigator.clipboard.writeText(cmd);
+      setCopiedFor(req.id);
+      setTimeout(() => setCopiedFor(undefined), 1500);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const downloadPostman = () => {
+    if (!flow) return;
+    const json = stringifyPostmanCollection(flow, { includeRaw: showRaw });
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'authlens-collection.postman_collection.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="stack" style={{ gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
+      <div className="row" style={{ gap: 'var(--space-2)' }}>
+        <button className="btn btn--secondary" onClick={downloadPostman}>
+          {t('analysis.downloadPostman')}
+        </button>
+      </div>
+      <table className="request-list">
+        <thead>
+          <tr>
+            <th className="col-methods">{t('capture.headerMethod')}</th>
+            <th>{t('analysis.endpointPattern')}</th>
+            <th className="col-resource">{t('analysis.endpointStatus')}</th>
+            <th className="col-actions">{t('analysis.endpointCopyCurl')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {endpoints.map((e) => {
+            const statusText = Object.entries(e.statusCounts)
+              .sort(([a], [b]) => Number(a) - Number(b))
+              .map(([s, c]) => (c > 1 ? `${s}×${c}` : s))
+              .join(' ');
+            return (
+              <tr key={`${e.host}|${e.pathPattern}`} className={e.authenticated ? 'is-login' : ''}>
+                <td className="col-methods">
+                  <div className="badge-row">
+                    {e.methods.map((m) => (
+                      <span key={m} className={`badge badge--${methodClass(m)}`}>
+                        {m}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+                <td>
+                  <code title={e.example.url}>
+                    {e.host}
+                    {e.pathPattern}
+                  </code>
+                  {e.authenticated && (
+                    <span className="badge badge--success" style={{ marginLeft: 6 }}>
+                      auth
+                    </span>
+                  )}
+                  <div className="muted text-xs">×{e.requestCount}</div>
+                </td>
+                <td className="col-resource muted text-xs">{statusText || '—'}</td>
+                <td className="col-actions">
+                  <button className="btn btn--secondary" onClick={() => copyCurl(e.example)}>
+                    {copiedFor === e.example.id
+                      ? t('common.copied')
+                      : t('analysis.copyCurl')}
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function LoginFormCard({ form }: { form: LoginFormAnalysis }) {
+  const { t } = useTranslation();
+  return (
+    <div className="jwt-card" style={{ marginTop: 'var(--space-3)' }}>
+      <dl className="jwt-claims">
+        <Claim label={t('analysis.formAction')} value={form.action ?? '(inline)'} />
+        <Claim label={t('analysis.formMethod')} value={form.method} />
+        {form.usernameFieldName && (
+          <Claim label={t('analysis.formUsernameField')} value={form.usernameFieldName} mono />
+        )}
+        {form.passwordFieldName && (
+          <Claim label={t('analysis.formPasswordField')} value={form.passwordFieldName} mono />
+        )}
+        {form.csrfField ? (
+          <Claim
+            label={t('analysis.formCsrf')}
+            value={`${form.csrfField.name}${form.csrfField.value ? ` (value present)` : ''}`}
+            mono
+          />
+        ) : (
+          <Claim label={t('analysis.formCsrf')} value={t('analysis.formCsrfMissing')} />
+        )}
+      </dl>
+      {form.fields.length > 0 && (
+        <details className="jwt-card__details">
+          <summary className="text-sm muted">
+            {t('analysis.formFieldsAll', { count: form.fields.length })}
+          </summary>
+          <table className="request-list" style={{ marginTop: 'var(--space-2)' }}>
+            <thead>
+              <tr>
+                <th>name</th>
+                <th>type</th>
+              </tr>
+            </thead>
+            <tbody>
+              {form.fields.map((f) => (
+                <tr key={f.name}>
+                  <td>
+                    <code>{f.name}</code>
+                  </td>
+                  <td>
+                    <code>{f.type}</code>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function LogoutCard({ items }: { items: LogoutEndpoint[] }) {
+  const { t } = useTranslation();
+  return (
+    <ul
+      className="stack"
+      style={{ gap: 'var(--space-2)', paddingLeft: 'var(--space-5)', marginTop: 'var(--space-3)' }}
+    >
+      {items.map((l, i) => (
+        <li key={i}>
+          <span className={`badge badge--${methodClass(l.request.method)}`}>
+            {l.request.method.toUpperCase()}
+          </span>{' '}
+          <code>{pathOf(l.request.url)}</code>{' '}
+          {l.status !== undefined && (
+            <span
+              className={`badge ${l.status >= 400 ? 'badge--danger' : 'badge--success'}`}
+            >
+              {l.status}
+            </span>
+          )}
+          {l.clearedSessionCookie && (
+            <span className="badge badge--info" style={{ marginLeft: 6 }}>
+              {t('analysis.logoutClearedCookie')}
+            </span>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 

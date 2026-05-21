@@ -325,9 +325,16 @@ samp {
   overflow-wrap: anywhere;
   white-space: normal;
 }
-/* Column width hints — only narrow columns are pinned, URL column flexes. */
+/* Column width hints — only narrow columns are pinned, URL column flexes.
+   col-method holds a single HTTP method badge. Cell padding (~32px) eats most
+   of the width, so 100px gives the badge ~68px which comfortably fits POST,
+   DELETE, OPTIONS, etc. */
 .request-list th.col-method,
-.request-list td.col-method { width: 70px; }
+.request-list td.col-method { width: 100px; }
+/* `col-methods` (plural) is for cells that can carry multiple HTTP method
+   badges (e.g. grouped endpoints with GET + POST + PATCH). */
+.request-list th.col-methods,
+.request-list td.col-methods { width: 150px; }
 .request-list th.col-status,
 .request-list td.col-status { width: 70px; }
 .request-list th.col-time,
@@ -338,6 +345,15 @@ samp {
 .request-list td.col-resource { width: 96px; }
 .request-list th.col-actions,
 .request-list td.col-actions { width: 200px; }
+
+/* Multi-badge container: flex-wraps with consistent gap when there are 3+
+   methods. Works both inline in a cell and standalone. */
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
 
 /* Mermaid preview */
 .mermaid-preview {
