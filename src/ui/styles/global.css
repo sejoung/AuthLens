@@ -531,6 +531,49 @@ samp {
   font-weight: 600;
   flex: 1;
 }
+/* Plain text inside disclosure bodies (Timeline event descriptions, etc.) can
+   contain long URLs/tokens. Allow wrapping at any character as a fallback. */
+.disclosure ol li,
+.disclosure ul li,
+.disclosure p {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Filter chips (DevTools-style) */
+.filter-chips {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.chip {
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-secondary);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: var(--font-xs);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.chip:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-muted);
+}
+.chip--active {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.chip__count {
+  font-size: 10px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
 
 /* JWT cards */
 .jwt-card {
@@ -639,6 +682,11 @@ samp {
   color: var(--color-text-primary);
   font-size: var(--font-base);
   line-height: 1.65;
+  /* Long URLs/tokens embedded as plain text (e.g. Timeline `Redirect 302 → https://…`)
+     must wrap. `overflow-wrap: anywhere` keeps normal text breaking at spaces but
+     allows URL-like atoms to break when they'd overflow. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .markdown-body > div:first-child > *:first-child {
   margin-top: 0;

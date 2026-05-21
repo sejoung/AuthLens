@@ -1,6 +1,11 @@
 import { TOOL_NAME, TOOL_VERSION, SCHEMA_VERSION } from '@/core';
 import type { AuthEvent, AuthFlow, CookieDiff, StorageDiff } from '@/core';
-import { findJwts, isNoteworthyEvent, type JwtLocation } from '@/analyzer';
+import {
+  findJwts,
+  findOAuthFlow,
+  isNoteworthyEvent,
+  type JwtLocation,
+} from '@/analyzer';
 import { generateMermaidDiagram } from './mermaid.js';
 
 export type MarkdownOptions = {
@@ -70,6 +75,27 @@ export type ReportStrings = {
   jwtHeader: string;
   jwtPayload: string;
   jwtSignaturePreview: string;
+  oauthHeading: string;
+  oauthAuthorizeHeading: string;
+  oauthTokenHeading: string;
+  oauthResponseType: string;
+  oauthClientId: string;
+  oauthRedirectUri: string;
+  oauthScopeRequested: string;
+  oauthScopeGranted: string;
+  oauthState: string;
+  oauthNonce: string;
+  oauthPkce: string;
+  oauthPkceYes: string;
+  oauthPkceNo: string;
+  oauthGrantType: string;
+  oauthTokenType: string;
+  oauthExpiresIn: string;
+  oauthExpiresAt: string;
+  oauthRefreshToken: string;
+  oauthIdToken: string;
+  oauthYes: string;
+  oauthNo: string;
 };
 
 export const DEFAULT_REPORT_STRINGS: ReportStrings = {
@@ -127,6 +153,27 @@ export const DEFAULT_REPORT_STRINGS: ReportStrings = {
   jwtHeader: 'Header',
   jwtPayload: 'Payload',
   jwtSignaturePreview: 'Signature (masked)',
+  oauthHeading: 'OAuth / OIDC flow',
+  oauthAuthorizeHeading: 'Authorization request',
+  oauthTokenHeading: 'Token exchange',
+  oauthResponseType: 'response_type',
+  oauthClientId: 'client_id',
+  oauthRedirectUri: 'redirect_uri',
+  oauthScopeRequested: 'Scope requested',
+  oauthScopeGranted: 'Scope granted',
+  oauthState: 'state',
+  oauthNonce: 'nonce (OIDC)',
+  oauthPkce: 'PKCE',
+  oauthPkceYes: 'enabled',
+  oauthPkceNo: 'not used',
+  oauthGrantType: 'grant_type',
+  oauthTokenType: 'token_type',
+  oauthExpiresIn: 'expires_in',
+  oauthExpiresAt: 'Expires at',
+  oauthRefreshToken: 'refresh_token issued',
+  oauthIdToken: 'id_token issued (OIDC)',
+  oauthYes: 'yes',
+  oauthNo: 'no',
 };
 
 export function generateMarkdownReport(
@@ -284,6 +331,44 @@ export function generateMarkdownReport(
     }
   }
   out.push('');
+
+  // OAuth / OIDC — only render if authorize or token endpoint observed.
+  const oauth = findOAuthFlow(flow);
+  if (oauth.authorizeRequests.length > 0 || oauth.tokenExchanges.length > 0) {
+    out.push(`## ${s.oauthHeading}`);
+    out.push('');
+    for (const a of oauth.authorizeRequests) {
+      out.push(`### ${s.oauthAuthorizeHeading} — \`${a.endpoint}\``);
+      out.push('');
+      if (a.responseType) out.push(`- **${s.oauthResponseType}:** \`${a.responseType}\``);
+      if (a.clientId) out.push(`- **${s.oauthClientId}:** \`${a.clientId}\``);
+      if (a.redirectUri) out.push(`- **${s.oauthRedirectUri}:** \`${a.redirectUri}\``);
+      if (a.scope) out.push(`- **${s.oauthScopeRequested}:** \`${a.scope}\``);
+      if (a.state) out.push(`- **${s.oauthState}:** \`${a.state}\``);
+      if (a.nonce) out.push(`- **${s.oauthNonce}:** \`${a.nonce}\``);
+      out.push(
+        `- **${s.oauthPkce}:** ${a.pkce ? s.oauthPkceYes : s.oauthPkceNo}${a.codeChallengeMethod ? ` (\`${a.codeChallengeMethod}\`)` : ''}`,
+      );
+      out.push('');
+    }
+    for (const e of oauth.tokenExchanges) {
+      out.push(`### ${s.oauthTokenHeading} — \`${e.endpoint}\``);
+      out.push('');
+      if (e.grantType) out.push(`- **${s.oauthGrantType}:** \`${e.grantType}\``);
+      if (e.clientId) out.push(`- **${s.oauthClientId}:** \`${e.clientId}\``);
+      if (e.tokenType) out.push(`- **${s.oauthTokenType}:** \`${e.tokenType}\``);
+      if (e.scope) out.push(`- **${s.oauthScopeGranted}:** \`${e.scope}\``);
+      if (e.expiresInSeconds !== undefined) {
+        out.push(`- **${s.oauthExpiresIn}:** \`${e.expiresInSeconds}s\``);
+      }
+      if (e.expiresAt) {
+        out.push(`- **${s.oauthExpiresAt}:** ${e.expiresAt.toISOString()}`);
+      }
+      out.push(`- **${s.oauthRefreshToken}:** ${e.hasRefreshToken ? s.oauthYes : s.oauthNo}`);
+      out.push(`- **${s.oauthIdToken}:** ${e.hasIdToken ? s.oauthYes : s.oauthNo}`);
+      out.push('');
+    }
+  }
 
   // Decoded JWTs — only render section if any tokens were found.
   const jwts = findJwts(flow);

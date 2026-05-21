@@ -21,7 +21,7 @@
   "firstLaunch": {
     "title": "Authorized use only",
     "noticeBody": "AuthLens is designed for authorized systems only. Use it for internal debugging, QA, documentation, and authentication flow analysis. Unauthorized use against third-party services may violate laws or terms of service.",
-    "policyBody": "AuthLens never stores raw tokens, passwords, or cookies by default. Sensitive values are masked across the UI and report exports. Replay and raw-export features are off by default and must be enabled per-session.",
+    "policyBody": "AuthLens never persists raw tokens, passwords, or cookies to local storage. They live in session memory for analysis and are stripped before being saved. The UI and report exports default to masked values; raw export and replay features must be enabled per session.",
     "acknowledge": "I understand"
   },
   "home": {
@@ -93,6 +93,16 @@
     "relevant": "relevant",
     "jwtTokens": "JWT tokens",
     "jwtCount": "{{count}} found",
+    "oauthFlow": "OAuth / OIDC flow",
+    "oauthCount": "{{authorize}} authorize · {{tokens}} token",
+    "noRequestsInGroup": "No requests match this filter.",
+    "resourceGroup": {
+      "api": "API",
+      "document": "Documents",
+      "script": "Scripts",
+      "other": "Other",
+      "all": "All"
+    },
     "timelineCount": "{{shown}} highlighted · {{total}} total",
     "timelineCountAll": "all {{count}} events",
     "requestCount": "{{shown}} relevant · {{total}} total",
@@ -193,6 +203,27 @@
     "jwtNotExpired": "valid",
     "jwtHeader": "Header",
     "jwtPayload": "Payload",
-    "jwtSignaturePreview": "Signature (masked)"
+    "jwtSignaturePreview": "Signature (masked)",
+    "oauthHeading": "OAuth / OIDC flow",
+    "oauthAuthorizeHeading": "Authorization request",
+    "oauthTokenHeading": "Token exchange",
+    "oauthResponseType": "response_type",
+    "oauthClientId": "client_id",
+    "oauthRedirectUri": "redirect_uri",
+    "oauthScopeRequested": "Scope requested",
+    "oauthScopeGranted": "Scope granted",
+    "oauthState": "state",
+    "oauthNonce": "nonce (OIDC)",
+    "oauthPkce": "PKCE",
+    "oauthPkceYes": "enabled",
+    "oauthPkceNo": "not used",
+    "oauthGrantType": "grant_type",
+    "oauthTokenType": "token_type",
+    "oauthExpiresIn": "expires_in",
+    "oauthExpiresAt": "Expires at",
+    "oauthRefreshToken": "refresh_token issued",
+    "oauthIdToken": "id_token issued (OIDC)",
+    "oauthYes": "yes",
+    "oauthNo": "no"
   }
 }

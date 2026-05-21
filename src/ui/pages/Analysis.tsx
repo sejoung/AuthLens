@@ -1,12 +1,17 @@
 import { useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import {
+  countByResourceGroup,
   diffCookies,
   diffStorage,
+  filterByResourceGroup,
   filterNoteworthyEvents,
-  filterNoteworthyRequests,
   findJwts,
+  findOAuthFlow,
   type JwtLocation,
+  type OAuthAuthorizeRequest,
+  type OAuthTokenExchange,
+  type ResourceGroup,
 } from '@/analyzer';
 import { generateMermaidDiagram } from '@/reporter';
 import { store, useAppState } from '../state/store.js';
@@ -17,7 +22,7 @@ export function AnalysisPage() {
   const { t } = useTranslation();
   const flow = state.activeFlow;
   const [showAllEvents, setShowAllEvents] = useState(false);
-  const [showAllRequests, setShowAllRequests] = useState(false);
+  const [requestFilter, setRequestFilter] = useState<ResourceGroup>('api');
 
   const { cookieDiff, storageDiff } = useMemo(() => {
     if (!flow) return { cookieDiff: undefined, storageDiff: undefined };
@@ -33,11 +38,23 @@ export function AnalysisPage() {
     () => (flow ? filterNoteworthyEvents(flow.events) : []),
     [flow],
   );
-  const noteworthyRequests = useMemo(
-    () => (flow ? filterNoteworthyRequests(flow.requests, flow.loginCandidates) : []),
+  const groupCounts = useMemo(
+    () =>
+      flow
+        ? countByResourceGroup(flow.requests)
+        : ({ api: 0, document: 0, script: 0, other: 0, all: 0 } as Record<ResourceGroup, number>),
     [flow],
   );
+  const filteredRequests = useMemo(
+    () =>
+      flow ? filterByResourceGroup(flow.requests, requestFilter, flow.loginCandidates) : [],
+    [flow, requestFilter],
+  );
   const jwts = useMemo(() => (flow ? findJwts(flow) : []), [flow]);
+  const oauth = useMemo(
+    () => (flow ? findOAuthFlow(flow) : { authorizeRequests: [], tokenExchanges: [] }),
+    [flow],
+  );
 
   if (!flow) {
     return (
@@ -55,7 +72,7 @@ export function AnalysisPage() {
   const stepsToShow = showAllEvents
     ? flow.steps
     : flow.steps.filter((s) => noteworthyEvents.includes(s.event));
-  const requestsToShow = showAllRequests ? flow.requests : noteworthyRequests;
+  const requestsToShow = filteredRequests;
 
   return (
     <div className="stack" style={{ gap: 'var(--space-6)' }}>
@@ -127,7 +144,7 @@ export function AnalysisPage() {
         <Metric
           label={t('capture.labelRequests')}
           value={flow.requests.length}
-          detail={`${noteworthyRequests.length} ${t('analysis.relevant')}`}
+          detail={`${groupCounts.api} ${t('analysis.resourceGroup.api')}`}
         />
         <Metric
           label={t('analysis.signalsLabel')}
@@ -153,8 +170,30 @@ export function AnalysisPage() {
         </div>
       )}
 
+      {(oauth.authorizeRequests.length > 0 || oauth.tokenExchanges.length > 0) && (
+        <details className="disclosure">
+          <summary>
+            <span className="disclosure__title">{t('analysis.oauthFlow')}</span>
+            <span className="muted text-xs">
+              {t('analysis.oauthCount', {
+                authorize: oauth.authorizeRequests.length,
+                tokens: oauth.tokenExchanges.length,
+              })}
+            </span>
+          </summary>
+          <div className="stack" style={{ gap: 'var(--space-4)', marginTop: 'var(--space-3)' }}>
+            {oauth.authorizeRequests.map((a, i) => (
+              <OAuthAuthorizeCard key={`a-${i}`} authorize={a} />
+            ))}
+            {oauth.tokenExchanges.map((e, i) => (
+              <OAuthTokenCard key={`t-${i}`} exchange={e} />
+            ))}
+          </div>
+        </details>
+      )}
+
       {jwts.length > 0 && (
-        <details className="disclosure" open>
+        <details className="disclosure">
           <summary>
             <span className="disclosure__title">{t('analysis.jwtTokens')}</span>
             <span className="muted text-xs">
@@ -169,7 +208,7 @@ export function AnalysisPage() {
         </details>
       )}
 
-      <details className="disclosure" open>
+      <details className="disclosure">
         <summary>
           <span className="disclosure__title">{t('analysis.timeline')}</span>
           <span className="muted text-xs">
@@ -204,14 +243,25 @@ export function AnalysisPage() {
         <summary>
           <span className="disclosure__title">{t('analysis.requestList')}</span>
           <span className="muted text-xs">
-            {showAllRequests
-              ? t('analysis.requestCountAll', { count: flow.requests.length })
-              : t('analysis.requestCount', {
-                  shown: noteworthyRequests.length,
-                  total: flow.requests.length,
-                })}
+            {t('analysis.requestCount', {
+              shown: requestsToShow.length,
+              total: flow.requests.length,
+            })}
           </span>
         </summary>
+        <div className="filter-chips" style={{ marginTop: 'var(--space-3)' }}>
+          {(['api', 'document', 'script', 'other', 'all'] as const).map((g) => (
+            <button
+              key={g}
+              type="button"
+              className={`chip ${requestFilter === g ? 'chip--active' : ''}`}
+              onClick={() => setRequestFilter(g)}
+            >
+              {t(`analysis.resourceGroup.${g}`)}{' '}
+              <span className="chip__count">{groupCounts[g]}</span>
+            </button>
+          ))}
+        </div>
         <table className="request-list" style={{ marginTop: 'var(--space-3)' }}>
           <thead>
             <tr>
@@ -237,17 +287,15 @@ export function AnalysisPage() {
                 </tr>
               );
             })}
+            {requestsToShow.length === 0 && (
+              <tr>
+                <td colSpan={4} className="muted text-sm" style={{ textAlign: 'center' }}>
+                  {t('analysis.noRequestsInGroup')}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
-        {flow.requests.length > requestsToShow.length && (
-          <button
-            className="btn btn--secondary"
-            onClick={() => setShowAllRequests(true)}
-            style={{ marginTop: 'var(--space-2)' }}
-          >
-            {t('analysis.showAllRequests', { count: flow.requests.length })}
-          </button>
-        )}
       </details>
 
       <div className="row row--end">
@@ -352,6 +400,93 @@ function JwtCard({ location }: { location: JwtLocation }) {
       </details>
     </div>
   );
+}
+
+function OAuthAuthorizeCard({ authorize }: { authorize: OAuthAuthorizeRequest }) {
+  const { t } = useTranslation();
+  const a = authorize;
+  return (
+    <div className="jwt-card">
+      <div className="jwt-card__head">
+        <span className="badge badge--info">{t('reportContent.oauthAuthorizeHeading')}</span>
+        <code className="jwt-card__label" title={a.endpoint}>{a.endpoint}</code>
+        <span className={`badge ${a.pkce ? 'badge--success' : 'badge--warning'}`}>
+          PKCE: {a.pkce ? t('reportContent.oauthPkceYes') : t('reportContent.oauthPkceNo')}
+        </span>
+      </div>
+      <dl className="jwt-claims">
+        {a.responseType && <Claim label={t('reportContent.oauthResponseType')} value={a.responseType} />}
+        {a.clientId && <Claim label={t('reportContent.oauthClientId')} value={a.clientId} />}
+        {a.redirectUri && <Claim label={t('reportContent.oauthRedirectUri')} value={a.redirectUri} />}
+        {a.scope && <Claim label={t('reportContent.oauthScopeRequested')} value={a.scope} />}
+        {a.state && <Claim label={t('reportContent.oauthState')} value={a.state} mono />}
+        {a.nonce && <Claim label={t('reportContent.oauthNonce')} value={a.nonce} mono />}
+        {a.codeChallengeMethod && (
+          <Claim label="code_challenge_method" value={a.codeChallengeMethod} />
+        )}
+      </dl>
+    </div>
+  );
+}
+
+function OAuthTokenCard({ exchange }: { exchange: OAuthTokenExchange }) {
+  const { t } = useTranslation();
+  const e = exchange;
+  const expiresSoon =
+    e.expiresAt && e.expiresAt.getTime() - Date.now() < 5 * 60 * 1000;
+  const expired = e.expiresAt && e.expiresAt.getTime() < Date.now();
+  return (
+    <div className="jwt-card">
+      <div className="jwt-card__head">
+        <span className="badge badge--info">{t('reportContent.oauthTokenHeading')}</span>
+        <code className="jwt-card__label" title={e.endpoint}>{e.endpoint}</code>
+        {e.expiresAt && (
+          <span
+            className={`badge ${expired ? 'badge--danger' : expiresSoon ? 'badge--warning' : 'badge--success'}`}
+          >
+            {expired
+              ? t('reportContent.jwtExpired')
+              : `${t('reportContent.oauthExpiresIn')}: ${formatDuration(e.expiresAt.getTime() - Date.now())}`}
+          </span>
+        )}
+      </div>
+      <dl className="jwt-claims">
+        {e.grantType && <Claim label={t('reportContent.oauthGrantType')} value={e.grantType} />}
+        {e.clientId && <Claim label={t('reportContent.oauthClientId')} value={e.clientId} />}
+        {e.tokenType && <Claim label={t('reportContent.oauthTokenType')} value={e.tokenType} />}
+        {e.scope && <Claim label={t('reportContent.oauthScopeGranted')} value={e.scope} />}
+        {e.expiresInSeconds !== undefined && (
+          <Claim
+            label={t('reportContent.oauthExpiresIn')}
+            value={`${e.expiresInSeconds}s`}
+          />
+        )}
+        {e.expiresAt && (
+          <Claim label={t('reportContent.oauthExpiresAt')} value={e.expiresAt.toLocaleString()} />
+        )}
+        <Claim
+          label={t('reportContent.oauthRefreshToken')}
+          value={e.hasRefreshToken ? t('reportContent.oauthYes') : t('reportContent.oauthNo')}
+        />
+        <Claim
+          label={t('reportContent.oauthIdToken')}
+          value={e.hasIdToken ? t('reportContent.oauthYes') : t('reportContent.oauthNo')}
+        />
+      </dl>
+    </div>
+  );
+}
+
+function formatDuration(ms: number): string {
+  const sec = Math.floor(ms / 1000);
+  if (sec < 0) return '0s';
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ${min % 60}m`;
+  const day = Math.floor(hr / 24);
+  return `${day}d ${hr % 24}h`;
 }
 
 function Claim({ label, value, mono }: { label: string; value: string; mono?: boolean }) {

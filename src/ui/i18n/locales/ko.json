@@ -21,7 +21,7 @@
   "firstLaunch": {
     "title": "허가된 시스템 전용",
     "noticeBody": "AuthLens는 허가된 시스템 분석을 위해 설계되었습니다. 사내 디버깅, QA, 문서화, 인증 흐름 분석 용도로 사용하세요. 제3자 서비스에 대한 무단 사용은 법령 또는 약관을 위반할 수 있습니다.",
-    "policyBody": "AuthLens는 토큰·비밀번호·쿠키의 원문을 기본적으로 저장하지 않습니다. UI와 리포트 모두에서 민감 정보는 마스킹된 형태로만 표시되며, replay 및 원문 export 기능은 기본 비활성으로 세션별로 직접 켜야 합니다.",
+    "policyBody": "AuthLens는 토큰·비밀번호·쿠키의 원문을 로컬 저장소에 영구 저장하지 않습니다. 분석을 위해 세션 메모리에는 일시 보관되지만, 저장 직전에 제거됩니다. UI와 리포트는 기본적으로 마스킹된 값만 표시하며, 원문 export 및 replay 기능은 세션별로 직접 켜야 합니다.",
     "acknowledge": "확인했습니다"
   },
   "home": {
@@ -93,6 +93,16 @@
     "relevant": "관련",
     "jwtTokens": "JWT 토큰",
     "jwtCount": "{{count}}건 발견",
+    "oauthFlow": "OAuth / OIDC 흐름",
+    "oauthCount": "authorize {{authorize}}건 · token {{tokens}}건",
+    "noRequestsInGroup": "이 필터에 해당하는 요청이 없습니다.",
+    "resourceGroup": {
+      "api": "API",
+      "document": "문서",
+      "script": "스크립트",
+      "other": "기타",
+      "all": "전체"
+    },
     "timelineCount": "주요 {{shown}}건 · 전체 {{total}}건",
     "timelineCountAll": "전체 {{count}}건",
     "requestCount": "관련 {{shown}}건 · 전체 {{total}}건",
@@ -193,6 +203,27 @@
     "jwtNotExpired": "유효",
     "jwtHeader": "Header",
     "jwtPayload": "Payload",
-    "jwtSignaturePreview": "Signature (마스킹)"
+    "jwtSignaturePreview": "Signature (마스킹)",
+    "oauthHeading": "OAuth / OIDC 흐름",
+    "oauthAuthorizeHeading": "Authorize 요청",
+    "oauthTokenHeading": "Token 교환",
+    "oauthResponseType": "response_type",
+    "oauthClientId": "client_id",
+    "oauthRedirectUri": "redirect_uri",
+    "oauthScopeRequested": "요청 scope",
+    "oauthScopeGranted": "발급 scope",
+    "oauthState": "state",
+    "oauthNonce": "nonce (OIDC)",
+    "oauthPkce": "PKCE",
+    "oauthPkceYes": "사용",
+    "oauthPkceNo": "미사용",
+    "oauthGrantType": "grant_type",
+    "oauthTokenType": "token_type",
+    "oauthExpiresIn": "expires_in",
+    "oauthExpiresAt": "만료 시각",
+    "oauthRefreshToken": "refresh_token 발급",
+    "oauthIdToken": "id_token 발급 (OIDC)",
+    "oauthYes": "예",
+    "oauthNo": "아니오"
   }
 }

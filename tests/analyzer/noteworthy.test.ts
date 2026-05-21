@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  countByResourceGroup,
+  filterByResourceGroup,
   filterNoteworthyEvents,
   filterNoteworthyRequests,
+  resourceGroupOf,
 } from '@/analyzer/noteworthy';
 import type { AuthEvent } from '@/core';
 import { makeRequest } from './test-helpers.js';
@@ -88,5 +91,65 @@ describe('filterNoteworthyRequests', () => {
       { requestId: reqs[0]!.id, score: 50, confidence: 'medium', reasons: [] },
     ]);
     expect(out).toHaveLength(1);
+  });
+});
+
+describe('resourceGroupOf', () => {
+  it('maps xhr/fetch/eventsource/websocket to api', () => {
+    expect(resourceGroupOf('xhr')).toBe('api');
+    expect(resourceGroupOf('fetch')).toBe('api');
+    expect(resourceGroupOf('eventsource')).toBe('api');
+    expect(resourceGroupOf('websocket')).toBe('api');
+  });
+  it('maps document to document', () => {
+    expect(resourceGroupOf('document')).toBe('document');
+  });
+  it('maps unknown types to other', () => {
+    expect(resourceGroupOf('image')).toBe('other');
+    expect(resourceGroupOf('font')).toBe('other');
+    expect(resourceGroupOf('something-weird')).toBe('other');
+  });
+});
+
+describe('countByResourceGroup', () => {
+  it('returns per-group counts and total', () => {
+    const reqs = [
+      makeRequest({ resourceType: 'xhr' }),
+      makeRequest({ resourceType: 'fetch' }),
+      makeRequest({ resourceType: 'document' }),
+      makeRequest({ resourceType: 'image' }),
+      makeRequest({ resourceType: 'script' }),
+    ];
+    const c = countByResourceGroup(reqs);
+    expect(c.api).toBe(2);
+    expect(c.document).toBe(1);
+    expect(c.script).toBe(1);
+    expect(c.other).toBe(1);
+    expect(c.all).toBe(5);
+  });
+});
+
+describe('filterByResourceGroup', () => {
+  const reqs = [
+    makeRequest({ id: 'a', resourceType: 'xhr' }),
+    makeRequest({ id: 'b', resourceType: 'document' }),
+    makeRequest({ id: 'c', resourceType: 'image' }),
+  ];
+
+  it('returns only the chosen group', () => {
+    expect(filterByResourceGroup(reqs, 'api').map((r) => r.id)).toEqual(['a']);
+    expect(filterByResourceGroup(reqs, 'document').map((r) => r.id)).toEqual(['b']);
+    expect(filterByResourceGroup(reqs, 'other').map((r) => r.id)).toEqual(['c']);
+  });
+
+  it('passes everything when group=all', () => {
+    expect(filterByResourceGroup(reqs, 'all')).toHaveLength(3);
+  });
+
+  it('always lets login candidates through', () => {
+    const out = filterByResourceGroup(reqs, 'api', [
+      { requestId: 'c', score: 80, confidence: 'high', reasons: [] },
+    ]);
+    expect(out.map((r) => r.id).sort()).toEqual(['a', 'c']);
   });
 });
