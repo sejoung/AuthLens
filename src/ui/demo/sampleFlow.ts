@@ -119,14 +119,34 @@ export function createDemoAuthFlow(
     },
   ];
 
+  const host = new URL(targetUrl).hostname;
   const sessionCookie: CookieSnapshot = {
     name: 'session',
-    domain: new URL(targetUrl).hostname,
+    domain: host,
     path: '/',
     value: toSensitiveValue('session', 'session-value-12345abc', policy),
     httpOnly: true,
     secure: true,
     sameSite: 'Lax',
+  };
+  // Analytics cookie — included to demonstrate the compact filter.
+  const analyticsCookie: CookieSnapshot = {
+    name: '_ga',
+    domain: host,
+    path: '/',
+    value: toSensitiveValue('_ga', 'GA1.2.987654321.demo', policy),
+    httpOnly: false,
+    secure: true,
+    sameSite: 'Lax',
+  };
+  // Locale cookie — also non-auth noise.
+  const localeCookie: CookieSnapshot = {
+    name: 'i18n_locale',
+    domain: host,
+    path: '/',
+    value: toSensitiveValue('i18n_locale', 'en-US', policy),
+    httpOnly: false,
+    secure: false,
   };
 
   return analyze({
@@ -136,9 +156,15 @@ export function createDemoAuthFlow(
     requests,
     responses,
     cookiesBefore: [],
-    cookiesAfter: [sessionCookie],
+    cookiesAfter: [sessionCookie, analyticsCookie, localeCookie],
     storageBefore: { localStorage: [], sessionStorage: [] },
-    storageAfter: { localStorage: [], sessionStorage: [] },
+    storageAfter: {
+      // 'preferences' is noise (no token shape), 'access_token' is auth signal.
+      localStorage: [
+        { key: 'preferences', value: toSensitiveValue('preferences', '{"theme":"dark"}', policy) },
+      ],
+      sessionStorage: [],
+    },
   });
 }
 

@@ -56,7 +56,7 @@ export function ReportPage() {
         flow,
         cookieDiff,
         storageDiff,
-        { includeRaw: effectiveIncludeRaw, compactTimeline: compact },
+        { includeRaw: effectiveIncludeRaw, compact },
         reportStrings,
       ),
       json: stringifyJsonExport(flow, { includeRaw: effectiveIncludeRaw }),

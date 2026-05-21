@@ -60,6 +60,9 @@
     "labelAuthCandidates": "인증 후보",
     "stop": "캡처 종료",
     "stopping": "종료 중…",
+    "analyzing": "분석 중…",
+    "analyzingTitle": "캡처 데이터 분석 중",
+    "analyzingBody": "{{count}}개 요청을 처리하고 있습니다 — 민감 정보 마스킹, diff 계산, 인증 방식 추론.",
     "liveNetwork": "실시간 네트워크",
     "waiting": "트래픽 대기 중…",
     "headerTime": "시각",
@@ -118,7 +121,7 @@
     "tabPreview": "미리보기",
     "tabMarkdown": "Markdown",
     "tabJson": "JSON",
-    "compact": "주요 항목만 보기",
+    "compact": "축약 — 인증 관련 항목만",
     "includeRaw": "원문 값 포함",
     "rawWarning": "⚠ 민감 정보의 원문이 포함됩니다. 권한이 확인된 사람에게만 공유하세요.",
     "rawUnavailable": "로컬 저장소에서 불러온 캡처라 영구 저장 시 원문이 제거되었습니다. 원문을 보려면 새로 캡처하세요."

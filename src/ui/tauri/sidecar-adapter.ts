@@ -100,3 +100,47 @@ export function buildFlowFromCapture(raw: SidecarRawCapture): AuthFlow {
     storageAfter,
   });
 }
+
+/**
+ * 비동기·청크 처리 버전. 큰 캡처(수백 요청)에서 메인 스레드를 막지 않도록
+ * 64건마다 `setTimeout(0)`로 양보한다. 모든 마스킹은 동기 작업이지만 누적되면
+ * 가시적 freeze가 생긴다.
+ */
+export async function buildFlowFromCaptureAsync(
+  raw: SidecarRawCapture,
+): Promise<AuthFlow> {
+  const yield_ = () => new Promise<void>((r) => setTimeout(r, 0));
+  const CHUNK = 64;
+
+  const requests = [];
+  for (let i = 0; i < raw.requests.length; i++) {
+    requests.push(toRequestRecord(raw.requests[i]!));
+    if (i > 0 && i % CHUNK === 0) await yield_();
+  }
+
+  const responses = [];
+  for (let i = 0; i < raw.responses.length; i++) {
+    responses.push(toResponseRecord(raw.responses[i]!));
+    if (i > 0 && i % CHUNK === 0) await yield_();
+  }
+
+  const cookiesBefore = raw.cookiesBefore.map(toCookieSnapshot);
+  const cookiesAfter = raw.cookiesAfter.map(toCookieSnapshot);
+  const storageAfter: StorageSnapshot = {
+    localStorage: toStorageSnapshot(raw.storage.localStorage),
+    sessionStorage: toStorageSnapshot(raw.storage.sessionStorage),
+  };
+
+  await yield_();
+  return analyze({
+    targetUrl: raw.target,
+    startedAt: raw.startedAt,
+    endedAt: raw.endedAt,
+    requests,
+    responses,
+    cookiesBefore,
+    cookiesAfter,
+    storageBefore: { localStorage: [], sessionStorage: [] },
+    storageAfter,
+  });
+}

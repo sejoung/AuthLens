@@ -390,11 +390,11 @@ function JwtCard({ location }: { location: JwtLocation }) {
         )}
         <Claim label={t('reportContent.jwtSignaturePreview')} value={j.signaturePreview} mono />
       </dl>
-      <details className="jwt-card__details">
+      <details className="jwt-card__details" open>
         <summary className="text-sm muted">{t('reportContent.jwtPayload')}</summary>
         <pre className="jwt-json">{JSON.stringify(j.payload, null, 2)}</pre>
       </details>
-      <details className="jwt-card__details">
+      <details className="jwt-card__details" open>
         <summary className="text-sm muted">{t('reportContent.jwtHeader')}</summary>
         <pre className="jwt-json">{JSON.stringify(j.header, null, 2)}</pre>
       </details>

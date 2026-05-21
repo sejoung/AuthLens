@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { store, useAppState } from '../state/store.js';
 import { createDemoAuthFlow } from '../demo/sampleFlow.js';
+import { Spinner } from '../components/Spinner.js';
 
 export function CapturePage() {
   const state = useAppState();
@@ -55,7 +56,10 @@ export function CapturePage() {
     void store.saveActiveFlow();
   };
 
-  const active = state.captureStatus === 'running' || state.captureStatus === 'stopping';
+  const active =
+    state.captureStatus === 'running' ||
+    state.captureStatus === 'stopping' ||
+    state.captureStatus === 'analyzing';
   if (!active && !state.activeFlow) {
     return (
       <div className="empty-state">
@@ -102,6 +106,18 @@ export function CapturePage() {
         </div>
       )}
 
+      {state.captureStatus === 'analyzing' && (
+        <div className="notice-banner" role="status" aria-live="polite">
+          <Spinner size={18} />
+          <div>
+            <div className="notice-banner__title">{t('capture.analyzingTitle')}</div>
+            <p className="notice-banner__body">
+              {t('capture.analyzingBody', { count: state.captureStats.requestCount })}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <div className="row row--between">
           <div className="stack" style={{ gap: 'var(--space-1)' }}>
@@ -118,10 +134,20 @@ export function CapturePage() {
           <button
             className="btn btn--danger"
             onClick={stop}
-            disabled={state.captureStatus === 'stopping'}
-            aria-busy={state.captureStatus === 'stopping'}
+            disabled={state.captureStatus !== 'running'}
+            aria-busy={state.captureStatus !== 'running'}
           >
-            {state.captureStatus === 'stopping' ? t('capture.stopping') : t('capture.stop')}
+            {state.captureStatus === 'stopping' && (
+              <>
+                <Spinner /> {t('capture.stopping')}
+              </>
+            )}
+            {state.captureStatus === 'analyzing' && (
+              <>
+                <Spinner /> {t('capture.analyzing')}
+              </>
+            )}
+            {state.captureStatus === 'running' && t('capture.stop')}
           </button>
         </div>
       </div>

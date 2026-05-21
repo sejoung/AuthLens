@@ -14,11 +14,29 @@ export type MarkdownOptions = {
   /** 헤더에 raw 토큰을 절대 포함하지 않음 (강제). */
   enforceMasking?: boolean;
   /**
-   * Timeline에서 noteworthy 이벤트만 표시할지. 기본 true.
-   * false면 모든 AuthEvent를 timeline에 노출.
+   * "Highlights only" mode. 기본 true.
+   *
+   * - Timeline: noteworthy AuthEvent 만 표시
+   * - Cookie Changes: HttpOnly 거나 session/auth/token/csrf 같은 이름 패턴인 쿠키만
+   * - Storage Changes: token/auth/session/jwt 가 키에 포함된 항목만
+   * - Redirect Flow: cross-domain redirect 만
+   *
+   * false면 모든 항목을 그대로 노출.
    */
+  compact?: boolean;
+  /** @deprecated `compact`를 사용하세요. */
   compactTimeline?: boolean;
 };
+
+const AUTH_COOKIE_PATTERN = /session|auth|token|csrf|xsrf|jwt/i;
+const AUTH_STORAGE_KEY_PATTERN = /token|auth|session|jwt/i;
+
+function isNoteworthyCookieName(name: string, httpOnly: boolean): boolean {
+  return httpOnly || AUTH_COOKIE_PATTERN.test(name);
+}
+function isNoteworthyStorageKey(key: string): boolean {
+  return AUTH_STORAGE_KEY_PATTERN.test(key);
+}
 
 /**
  * 리포트에 들어가는 라벨/제목 모음.
@@ -184,6 +202,13 @@ export function generateMarkdownReport(
   strings: ReportStrings = DEFAULT_REPORT_STRINGS,
 ): string {
   const s = strings;
+  // Resolve compact mode. Default true. Honor legacy `compactTimeline`.
+  const compact =
+    opts.compact !== undefined
+      ? opts.compact
+      : opts.compactTimeline !== undefined
+        ? opts.compactTimeline
+        : true;
   const out: string[] = [];
   out.push(`# ${s.title}`);
   out.push('');
@@ -242,63 +267,126 @@ export function generateMarkdownReport(
   }
   out.push('');
 
-  // Cookie Changes
+  // Cookie Changes — when compact, only HttpOnly or auth-shaped names.
   out.push(`## ${s.cookieHeading}`);
   out.push('');
+  const cookieAdded = compact
+    ? cookieDiff.added.filter((c) => isNoteworthyCookieName(c.name, c.httpOnly))
+    : cookieDiff.added;
+  const cookieChanged = compact
+    ? cookieDiff.changed.filter((c) =>
+        isNoteworthyCookieName(c.after.name, c.after.httpOnly),
+      )
+    : cookieDiff.changed;
+  const cookieRemoved = compact
+    ? cookieDiff.removed.filter((c) => isNoteworthyCookieName(c.name, c.httpOnly))
+    : cookieDiff.removed;
   if (
-    cookieDiff.added.length === 0 &&
-    cookieDiff.removed.length === 0 &&
-    cookieDiff.changed.length === 0
+    cookieAdded.length === 0 &&
+    cookieRemoved.length === 0 &&
+    cookieChanged.length === 0
   ) {
     out.push(s.noCookieChanges);
   } else {
-    if (cookieDiff.added.length > 0) {
+    if (cookieAdded.length > 0) {
       out.push(`**${s.addedLabel}**`);
       out.push('');
-      for (const c of cookieDiff.added) {
+      for (const c of cookieAdded) {
         out.push(
           `- \`${c.name}\` @ ${c.domain}${c.path} → ${cookieValueDisplay(c.value, opts)} ${flagSuffix(c)}`,
         );
       }
       out.push('');
     }
-    if (cookieDiff.changed.length > 0) {
+    if (cookieChanged.length > 0) {
       out.push(`**${s.changedLabel}**`);
       out.push('');
-      for (const c of cookieDiff.changed) {
+      for (const c of cookieChanged) {
         out.push(
           `- \`${c.after.name}\` @ ${c.after.domain}${c.after.path}: ${cookieValueDisplay(c.before.value, opts)} → ${cookieValueDisplay(c.after.value, opts)}`,
         );
       }
       out.push('');
     }
-    if (cookieDiff.removed.length > 0) {
+    if (cookieRemoved.length > 0) {
       out.push(`**${s.removedLabel}**`);
       out.push('');
-      for (const c of cookieDiff.removed) {
+      for (const c of cookieRemoved) {
         out.push(`- \`${c.name}\` @ ${c.domain}${c.path}`);
       }
       out.push('');
     }
   }
+  if (compact) {
+    const omitted =
+      cookieDiff.added.length -
+      cookieAdded.length +
+      (cookieDiff.changed.length - cookieChanged.length) +
+      (cookieDiff.removed.length - cookieRemoved.length);
+    if (omitted > 0) out.push(`_+${omitted} non-auth cookie changes omitted._`);
+  }
   out.push('');
 
-  // Storage Changes
+  // Storage Changes — when compact, only token/auth-shaped keys.
   out.push(`## ${s.storageHeading}`);
   out.push('');
-  appendStorageSection(out, 'localStorage', storageDiff.localStorage, opts, s);
-  appendStorageSection(out, 'sessionStorage', storageDiff.sessionStorage, opts, s);
+  const localStorageOmitted = appendStorageSection(
+    out,
+    'localStorage',
+    storageDiff.localStorage,
+    opts,
+    s,
+    compact,
+  );
+  const sessionStorageOmitted = appendStorageSection(
+    out,
+    'sessionStorage',
+    storageDiff.sessionStorage,
+    opts,
+    s,
+    compact,
+  );
+  if (compact && localStorageOmitted + sessionStorageOmitted > 0) {
+    out.push(
+      `_+${localStorageOmitted + sessionStorageOmitted} non-auth storage changes omitted._`,
+    );
+  }
   out.push('');
 
-  // Redirect Flow
+  // Redirect Flow — when compact, only cross-domain.
   out.push(`## ${s.redirectHeading}`);
   out.push('');
-  if (flow.redirects.length === 0) {
+  const targetHost = (() => {
+    try {
+      return new URL(flow.targetUrl).host.toLowerCase();
+    } catch {
+      return '';
+    }
+  })();
+  const isCrossDomain = (from: string, to: string) => {
+    try {
+      const fh = new URL(from).host.toLowerCase();
+      const th = new URL(to).host.toLowerCase();
+      return fh !== th || (targetHost ? th !== targetHost : false);
+    } catch {
+      return false;
+    }
+  };
+  const shownRedirects = compact
+    ? flow.redirects.filter((r) => isCrossDomain(r.fromUrl, r.toUrl))
+    : flow.redirects;
+  if (shownRedirects.length === 0) {
     out.push(`_${s.noRedirects}_`);
   } else {
-    for (const r of flow.redirects) {
+    for (const r of shownRedirects) {
       out.push(`- ${r.status}: ${r.fromUrl} → ${r.toUrl}`);
     }
+  }
+  if (compact && flow.redirects.length > shownRedirects.length) {
+    out.push('');
+    out.push(
+      `_+${flow.redirects.length - shownRedirects.length} same-domain redirects omitted._`,
+    );
   }
   out.push('');
 
@@ -313,7 +401,6 @@ export function generateMarkdownReport(
   // Timeline (compact by default — only noteworthy auth events).
   out.push(`## ${s.timelineHeading}`);
   out.push('');
-  const compact = opts.compactTimeline !== false;
   const shownSteps = compact
     ? flow.steps.filter((step) => isNoteworthyEvent(step.event as AuthEvent, step.index))
     : flow.steps;
@@ -457,35 +544,47 @@ function appendStorageSection(
   diff: StorageDiff['localStorage'],
   opts: MarkdownOptions,
   s: ReportStrings,
-) {
+  compact: boolean,
+): number {
   out.push(`### ${title}`);
   out.push('');
-  if (diff.added.length === 0 && diff.changed.length === 0 && diff.removed.length === 0) {
+  const added = compact ? diff.added.filter((e) => isNoteworthyStorageKey(e.key)) : diff.added;
+  const changed = compact
+    ? diff.changed.filter((e) => isNoteworthyStorageKey(e.after.key))
+    : diff.changed;
+  const removed = compact ? diff.removed.filter((e) => isNoteworthyStorageKey(e.key)) : diff.removed;
+  const omitted =
+    diff.added.length -
+    added.length +
+    (diff.changed.length - changed.length) +
+    (diff.removed.length - removed.length);
+  if (added.length === 0 && changed.length === 0 && removed.length === 0) {
     out.push(`_${s.noStorageChanges}_`);
     out.push('');
-    return;
+    return omitted;
   }
-  if (diff.added.length > 0) {
+  if (added.length > 0) {
     out.push(`**${s.addedLabel}**`);
-    for (const e of diff.added) {
+    for (const e of added) {
       out.push(`- \`${e.key}\` = \`${displayValue(e.value, opts)}\``);
     }
     out.push('');
   }
-  if (diff.changed.length > 0) {
+  if (changed.length > 0) {
     out.push(`**${s.changedLabel}**`);
-    for (const e of diff.changed) {
+    for (const e of changed) {
       out.push(`- \`${e.after.key}\``);
     }
     out.push('');
   }
-  if (diff.removed.length > 0) {
+  if (removed.length > 0) {
     out.push(`**${s.removedLabel}**`);
-    for (const e of diff.removed) {
+    for (const e of removed) {
       out.push(`- \`${e.key}\``);
     }
     out.push('');
   }
+  return omitted;
 }
 
 function displayValue(

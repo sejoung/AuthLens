@@ -9,7 +9,7 @@ import {
   stopCaptureBackend,
   type CaptureEvent,
 } from '../tauri/bridge.js';
-import { buildFlowFromCapture } from '../tauri/sidecar-adapter.js';
+import { buildFlowFromCaptureAsync } from '../tauri/sidecar-adapter.js';
 
 export type Route = 'home' | 'capture' | 'analysis' | 'report' | 'settings';
 
@@ -131,17 +131,22 @@ class Store {
           clearTimeout(this.stopTimer);
           this.stopTimer = undefined;
         }
-        try {
-          const flow = buildFlowFromCapture(event.payload);
-          this.setActiveFlow(flow);
-          void this.saveActiveFlow();
-        } catch (e) {
-          console.error('[authlens] buildFlowFromCapture failed:', e);
-          this.setState({
-            captureStatus: 'idle',
-            captureError: `Failed to build flow from capture: ${(e as Error).message}`,
+        // Switch to 'analyzing' so the UI shows progress immediately. The
+        // build is async (yields to event loop in chunks) so the spinner can
+        // actually render and the button can react.
+        this.setState({ captureStatus: 'analyzing' });
+        buildFlowFromCaptureAsync(event.payload)
+          .then((flow) => {
+            this.setActiveFlow(flow);
+            return this.saveActiveFlow();
+          })
+          .catch((e) => {
+            console.error('[authlens] buildFlowFromCapture failed:', e);
+            this.setState({
+              captureStatus: 'idle',
+              captureError: `Failed to build flow from capture: ${(e as Error).message}`,
+            });
           });
-        }
         return;
       }
       case 'error':

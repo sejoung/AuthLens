@@ -16,8 +16,13 @@ export function HomePage() {
       setError(t('home.errorMissing'));
       return;
     }
+    // Auto-prepend https:// if user didn't include a scheme.
+    // Heuristic: starts with a host-like token (not /, ?, #) and no `://` present.
+    const normalized = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
+      ? trimmed
+      : `https://${trimmed.replace(/^\/+/, '')}`;
     try {
-      const parsed = new URL(trimmed);
+      const parsed = new URL(normalized);
       if (!/^https?:$/.test(parsed.protocol)) {
         setError(t('home.errorScheme'));
         return;
@@ -27,11 +32,15 @@ export function HomePage() {
       return;
     }
 
-    store.setTargetUrl(url);
+    // Reflect the normalized value back into the input so the user sees what
+    // will actually be used.
+    if (normalized !== url) setUrl(normalized);
+
+    store.setTargetUrl(normalized);
     if (mode === 'capture') {
-      await store.startCapture(url);
+      await store.startCapture(normalized);
     } else {
-      const flow = createDemoAuthFlow(url, {
+      const flow = createDemoAuthFlow(normalized, {
         revealRaw: state.settings.revealRawByDefault,
       });
       store.setActiveFlow(flow);

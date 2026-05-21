@@ -52,21 +52,39 @@ export type OAuthFlowInfo = {
   tokenExchanges: OAuthTokenExchange[];
 };
 
-const AUTHORIZE_PATH_PATTERNS = ['/authorize', '/oauth/authorize', '/oauth2/authorize'];
-const TOKEN_PATH_PATTERNS = ['/oauth/token', '/oauth2/token', '/token'];
+// 표준 path 외에도 Google `/o/oauth2/v2/auth`, IdentityServer `/connect/authorize`,
+// Microsoft `/login.srf` 등 다양한 변형이 있어 path-only 매칭은 누락이 잦다.
+// 보조 신호: 표준 OAuth 파라미터 (response_type + client_id) 또는 grant_type 본문.
+const AUTHORIZE_PATH_HINTS = [
+  '/authorize',
+  '/oauth/authorize',
+  '/oauth2/authorize',
+  '/connect/authorize',
+  '/oauth2/v2/auth',
+  '/o/oauth2/auth',
+  '/o/oauth2/v2/auth',
+];
+const TOKEN_PATH_HINTS = [
+  '/oauth/token',
+  '/oauth2/token',
+  '/token',
+  '/connect/token',
+  '/oauth2/v4/token',
+  '/o/oauth2/token',
+];
 
 export function findOAuthFlow(flow: AuthFlow): OAuthFlowInfo {
   const authorizeRequests: OAuthAuthorizeRequest[] = [];
   const tokenExchanges: OAuthTokenExchange[] = [];
 
   for (const req of flow.requests) {
-    if (isAuthorizeUrl(req.url)) {
+    if (looksLikeAuthorizeRequest(req.url)) {
       const parsed = parseAuthorizeRequest(req.id, req.url);
       if (parsed) authorizeRequests.push(parsed);
     }
-    if (req.method.toUpperCase() === 'POST' && isTokenUrl(req.url)) {
+    const reqBody = req.postData?.raw ?? '';
+    if (req.method.toUpperCase() === 'POST' && looksLikeTokenRequest(req.url, reqBody)) {
       const res = flow.responses.find((r) => r.requestId === req.id);
-      const reqBody = req.postData?.raw ?? '';
       const resBody = res?.bodyPreview?.raw ?? '';
       const reqParams = parseFormOrJson(reqBody);
       const resJson = parseJsonSafe(resBody);
@@ -98,24 +116,39 @@ export function findOAuthFlow(flow: AuthFlow): OAuthFlowInfo {
   return { authorizeRequests, tokenExchanges };
 }
 
-function isAuthorizeUrl(url: string): boolean {
+/**
+ * authorize endpoint 판정:
+ *   1. path가 알려진 패턴으로 끝나거나
+ *   2. query에 `response_type`과 `client_id`가 모두 있음 (RFC 6749 §4.1.1)
+ */
+function looksLikeAuthorizeRequest(url: string): boolean {
+  let u: URL;
   try {
-    const u = new URL(url);
-    const p = u.pathname.toLowerCase();
-    return AUTHORIZE_PATH_PATTERNS.some((pat) => p === pat || p.endsWith(pat));
+    u = new URL(url);
   } catch {
     return false;
   }
+  const p = u.pathname.toLowerCase();
+  if (AUTHORIZE_PATH_HINTS.some((pat) => p === pat || p.endsWith(pat))) return true;
+  if (u.searchParams.has('response_type') && u.searchParams.has('client_id')) return true;
+  return false;
 }
 
-function isTokenUrl(url: string): boolean {
+/**
+ * token endpoint 판정 (POST 가정):
+ *   1. path가 알려진 패턴으로 끝나거나
+ *   2. 요청 본문에 `grant_type` 이 있음 (RFC 6749 §4.1.3 등 공통 요구)
+ */
+function looksLikeTokenRequest(url: string, body: string): boolean {
   try {
-    const u = new URL(url);
-    const p = u.pathname.toLowerCase();
-    return TOKEN_PATH_PATTERNS.some((pat) => p === pat || p.endsWith(pat));
+    const p = new URL(url).pathname.toLowerCase();
+    if (TOKEN_PATH_HINTS.some((pat) => p === pat || p.endsWith(pat))) return true;
   } catch {
-    return false;
+    /* fall through to body check */
   }
+  if (!body) return false;
+  const params = parseFormOrJson(body);
+  return typeof params.grant_type === 'string';
 }
 
 function parseAuthorizeRequest(requestId: string, url: string): OAuthAuthorizeRequest | undefined {

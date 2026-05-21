@@ -162,6 +162,49 @@ describe('generateMarkdownReport', () => {
   });
 });
 
+describe('generateMarkdownReport compact mode', () => {
+  it('filters non-auth cookies, non-token storage, and same-domain redirects when compact=true', () => {
+    const { flow, cookieDiff, storageDiff } = buildSampleFlow();
+    // Inject noise items
+    cookieDiff.added.push({
+      name: '_ga',
+      domain: 'app.example.com',
+      path: '/',
+      value: toSensitiveValue('_ga', 'GA1.2.x'),
+      httpOnly: false,
+      secure: true,
+    });
+    storageDiff.localStorage.added.push({
+      key: 'preferences',
+      value: toSensitiveValue('preferences', '{"theme":"dark"}'),
+    });
+    flow.redirects.push({
+      fromUrl: 'https://app.example.com/',
+      toUrl: 'https://app.example.com/home',
+      status: 302,
+      timestamp: '2026-01-01T00:00:00.500Z',
+    });
+    flow.redirects.push({
+      fromUrl: 'https://app.example.com/login',
+      toUrl: 'https://idp.example.com/sso',
+      status: 302,
+      timestamp: '2026-01-01T00:00:00.700Z',
+    });
+
+    const mdCompact = generateMarkdownReport(flow, cookieDiff, storageDiff, { compact: true });
+    expect(mdCompact).not.toContain('_ga');
+    expect(mdCompact).not.toContain('preferences');
+    expect(mdCompact).not.toContain('app.example.com/home');
+    expect(mdCompact).toContain('idp.example.com/sso');
+    expect(mdCompact).toContain('omitted');
+
+    const mdFull = generateMarkdownReport(flow, cookieDiff, storageDiff, { compact: false });
+    expect(mdFull).toContain('_ga');
+    expect(mdFull).toContain('preferences');
+    expect(mdFull).toContain('app.example.com/home');
+  });
+});
+
 describe('generateMermaidDiagram', () => {
   it('produces valid sequenceDiagram declaration', () => {
     const { flow } = buildSampleFlow();

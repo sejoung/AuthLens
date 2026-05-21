@@ -53,6 +53,46 @@ describe('findOAuthFlow — authorize endpoint', () => {
     expect(a.pkce).toBe(true);
   });
 
+  it('detects Google-style path (/o/oauth2/v2/auth) via path hint', () => {
+    const url =
+      'https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=goog&scope=openid';
+    const info = findOAuthFlow(
+      flowOf({
+        requests: [
+          {
+            id: 'r1',
+            url,
+            method: 'GET',
+            headers: maskHeaders({}),
+            resourceType: 'document',
+            timestamp: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    expect(info.authorizeRequests).toHaveLength(1);
+    expect(info.authorizeRequests[0]?.clientId).toBe('goog');
+  });
+
+  it('detects non-standard path by params (response_type + client_id)', () => {
+    const url = 'https://idp.example.com/api/sso/login?response_type=code&client_id=xyz&state=abc';
+    const info = findOAuthFlow(
+      flowOf({
+        requests: [
+          {
+            id: 'r1',
+            url,
+            method: 'GET',
+            headers: maskHeaders({}),
+            resourceType: 'document',
+            timestamp: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    expect(info.authorizeRequests).toHaveLength(1);
+  });
+
   it('marks pkce=false when code_challenge missing', () => {
     const url =
       'https://idp.example.com/oauth/authorize?response_type=code&client_id=demo&state=xyz';
@@ -124,6 +164,39 @@ describe('findOAuthFlow — token endpoint', () => {
     expect(t.hasRefreshToken).toBe(true);
     expect(t.hasIdToken).toBe(true);
     expect(t.status).toBe(200);
+  });
+
+  it('detects non-standard token endpoint via grant_type body fallback', () => {
+    const reqBody = 'grant_type=authorization_code&code=abc&client_id=demo';
+    const info = findOAuthFlow(
+      flowOf({
+        requests: [
+          {
+            id: 'r1',
+            url: 'https://idp.example.com/api/oauth/exchange',
+            method: 'POST',
+            headers: maskHeaders({ 'content-type': 'application/x-www-form-urlencoded' }),
+            postData: toSensitiveValue('body', reqBody),
+            resourceType: 'fetch',
+            timestamp: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        responses: [
+          {
+            id: 'rs1',
+            requestId: 'r1',
+            url: 'https://idp.example.com/api/oauth/exchange',
+            status: 200,
+            statusText: 'OK',
+            headers: maskHeaders({}),
+            bodyPreview: toSensitiveValue('body', '{"access_token":"x","expires_in":3600}'),
+            timestamp: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    expect(info.tokenExchanges).toHaveLength(1);
+    expect(info.tokenExchanges[0]?.grantType).toBe('authorization_code');
   });
 
   it('does not match GET /token', () => {

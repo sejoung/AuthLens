@@ -540,6 +540,22 @@ samp {
   word-break: break-word;
 }
 
+/* Spinner */
+.spinner {
+  display: inline-block;
+  box-sizing: border-box;
+  border: 2px solid currentColor;
+  border-bottom-color: transparent;
+  border-radius: 50%;
+  animation: authlens-spin 0.8s linear infinite;
+  vertical-align: -2px;
+}
+@keyframes authlens-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Filter chips (DevTools-style) */
 .filter-chips {
   display: flex;

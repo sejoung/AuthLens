@@ -60,6 +60,9 @@
     "labelAuthCandidates": "Auth candidates",
     "stop": "Stop Capture",
     "stopping": "Stopping…",
+    "analyzing": "Analyzing…",
+    "analyzingTitle": "Analyzing captured data",
+    "analyzingBody": "Processing {{count}} requests — masking sensitive values, building diffs, and inferring the auth type.",
     "liveNetwork": "Live network",
     "waiting": "Waiting for traffic…",
     "headerTime": "Time",
@@ -118,7 +121,7 @@
     "tabPreview": "Preview",
     "tabMarkdown": "Markdown",
     "tabJson": "JSON",
-    "compact": "Compact (highlights only)",
+    "compact": "Compact — auth highlights only",
     "includeRaw": "Include raw values",
     "rawWarning": "⚠ Raw sensitive values are included. Only share with authorized reviewers.",
     "rawUnavailable": "This capture was loaded from local storage, so raw values were stripped before persistence. Run a fresh capture to see raw values."
