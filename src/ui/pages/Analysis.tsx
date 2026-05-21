@@ -1,21 +1,27 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import {
+  analyzeLoginCredentials,
   countByResourceGroup,
   diffCookies,
   diffStorage,
+  displaySensitive,
   filterByResourceGroup,
   filterNoteworthyEvents,
   findJwts,
   findOAuthFlow,
+  flowContainsRaw,
+  hasAnyCredential,
   type BasicAuthUsage,
   type BearerUsage,
   type JwtLocation,
+  type LoginCredentials,
   type OAuthAuthorizeRequest,
   type OAuthCallback,
   type OAuthTokenExchange,
   type ResourceGroup,
 } from '@/analyzer';
+import type { RequestRecord, ResponseRecord } from '@/core';
 import { generateMermaidDiagram } from '@/reporter';
 import { store, useAppState } from '../state/store.js';
 import { MermaidDiagram } from '../components/MermaidDiagram.js';
@@ -26,6 +32,15 @@ export function AnalysisPage() {
   const flow = state.activeFlow;
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [requestFilter, setRequestFilter] = useState<ResourceGroup>('api');
+  const [includeRaw, setIncludeRaw] = useState(state.settings.revealRawByDefault);
+
+  // Sync from global setting on external changes (same pattern as Report page).
+  useEffect(() => {
+    setIncludeRaw(state.settings.revealRawByDefault);
+  }, [state.settings.revealRawByDefault]);
+
+  const rawAvailable = useMemo(() => flowContainsRaw(flow), [flow]);
+  const showRaw = includeRaw && rawAvailable;
 
   const { cookieDiff, storageDiff } = useMemo(() => {
     if (!flow) return { cookieDiff: undefined, storageDiff: undefined };
@@ -93,16 +108,33 @@ export function AnalysisPage() {
 
   return (
     <div className="stack" style={{ gap: 'var(--space-6)' }}>
-      <header className="page-header">
-        <span className="page-header__eyebrow">{t('analysis.eyebrow')}</span>
-        <h1 className="page-header__title">{t('analysis.title')}</h1>
-        <p className="page-header__lede">
-          <Trans
-            i18nKey="analysis.ledeFor"
-            values={{ url: flow.targetUrl }}
-            components={{ code: <code /> }}
-          />
-        </p>
+      <header className="page-header analysis-header">
+        <div className="analysis-header__text">
+          <span className="page-header__eyebrow">{t('analysis.eyebrow')}</span>
+          <h1 className="page-header__title">{t('analysis.title')}</h1>
+          <p className="page-header__lede">
+            <Trans
+              i18nKey="analysis.ledeFor"
+              values={{ url: flow.targetUrl }}
+              components={{ code: <code /> }}
+            />
+          </p>
+        </div>
+        <div className="analysis-header__controls">
+          <label
+            className="row text-sm"
+            style={{ gap: 'var(--space-2)', opacity: rawAvailable ? 1 : 0.5 }}
+            title={rawAvailable ? undefined : t('analysis.rawUnavailable')}
+          >
+            <input
+              type="checkbox"
+              checked={showRaw}
+              disabled={!rawAvailable}
+              onChange={(e) => setIncludeRaw(e.target.checked)}
+            />
+            {t('analysis.includeRaw')}
+          </label>
+        </div>
       </header>
 
       {/* Hero: sequence diagram + summary card side-by-side */}
@@ -168,6 +200,24 @@ export function AnalysisPage() {
           value={summary?.detectedSignals.length ?? 0}
         />
       </div>
+
+      {topCandidate && (() => {
+        const loginReq = flow.requests.find((r) => r.id === topCandidate.requestId);
+        const loginRes = flow.responses.find((r) => r.requestId === topCandidate.requestId);
+        if (!loginReq) return null;
+        return (
+          <details className="disclosure" open>
+            <summary>
+              <span className="disclosure__title">{t('analysis.loginTransaction')}</span>
+              <span className="muted text-xs">
+                {loginReq.method.toUpperCase()} {pathOf(loginReq.url)}
+                {loginRes && ` · ${loginRes.status}`}
+              </span>
+            </summary>
+            <LoginTransactionCard request={loginReq} response={loginRes} showRaw={showRaw} />
+          </details>
+        );
+      })()}
 
       {summary && summary.warnings.length > 0 && (
         <div className="card">
@@ -237,7 +287,7 @@ export function AnalysisPage() {
           </summary>
           <div className="stack" style={{ gap: 'var(--space-4)', marginTop: 'var(--space-3)' }}>
             {jwts.map((j, i) => (
-              <JwtCard key={`${j.source}-${j.label}-${i}`} location={j} />
+              <JwtCard key={`${j.source}-${j.label}-${i}`} location={j} showRaw={showRaw} />
             ))}
           </div>
         </details>
@@ -392,9 +442,11 @@ function shortTime(iso: string): string {
   }
 }
 
-function JwtCard({ location }: { location: JwtLocation }) {
+function JwtCard({ location, showRaw }: { location: JwtLocation; showRaw: boolean }) {
   const { t } = useTranslation();
   const j = location.decoded;
+  const sigLabel = showRaw ? t('reportContent.jwtSignature') : t('reportContent.jwtSignaturePreview');
+  const sigValue = showRaw ? j.signature : j.signaturePreview;
   return (
     <div className="jwt-card">
       <div className="jwt-card__head">
@@ -423,7 +475,7 @@ function JwtCard({ location }: { location: JwtLocation }) {
         {j.expiresAt && (
           <Claim label={t('reportContent.jwtExpiresAt')} value={j.expiresAt.toLocaleString()} />
         )}
-        <Claim label={t('reportContent.jwtSignaturePreview')} value={j.signaturePreview} mono />
+        <Claim label={sigLabel} value={sigValue} mono />
       </dl>
       <details className="jwt-card__details" open>
         <summary className="text-sm muted">{t('reportContent.jwtPayload')}</summary>
@@ -509,6 +561,205 @@ function OAuthTokenCard({ exchange }: { exchange: OAuthTokenExchange }) {
         />
       </dl>
     </div>
+  );
+}
+
+function CredentialsCard({
+  credentials,
+  reveal,
+}: {
+  credentials: LoginCredentials;
+  reveal: boolean;
+}) {
+  const { t } = useTranslation();
+  const items: Array<{ label: string; value: string; tone: 'info' | 'warning' | 'success' }> = [];
+
+  if (credentials.scheme === 'basic') {
+    let value: string;
+    if (credentials.basicUsername !== undefined) {
+      const pw = reveal && credentials.basicPassword !== undefined ? credentials.basicPassword : '••••••••';
+      value = `username: ${credentials.basicUsername}, password: ${pw}`;
+    } else {
+      value = t('analysis.credBasicMasked');
+    }
+    items.push({ label: t('analysis.credBasic'), value, tone: 'warning' });
+  }
+  if (credentials.scheme === 'bearer') {
+    const parts = [t('analysis.credBearer')];
+    if (credentials.bearerIsJwt) parts.push('JWT');
+    if (credentials.bearerTokenLength) parts.push(`${credentials.bearerTokenLength} chars`);
+    items.push({ label: t('analysis.credAuthHeader'), value: parts.join(' · '), tone: 'info' });
+  }
+  if (credentials.usernameField) {
+    items.push({
+      label: t('analysis.credBodyUsername'),
+      value: credentials.usernameValue
+        ? `${credentials.usernameField} = ${credentials.usernameValue}`
+        : credentials.usernameField,
+      tone: 'info',
+    });
+  }
+  if (credentials.passwordField) {
+    const pw =
+      reveal && credentials.passwordValue !== undefined ? credentials.passwordValue : '••••••••';
+    items.push({
+      label: t('analysis.credBodyPassword'),
+      value: `${credentials.passwordField} = ${pw}`,
+      tone: 'warning',
+    });
+  }
+  if (items.length === 0) return null;
+  return (
+    <div className="credentials-card" role="region" aria-label={t('analysis.credSection')}>
+      <div className="credentials-card__title">
+        <span className="badge badge--info">{t('analysis.credSection')}</span>
+        {credentials.bodyFormat && (
+          <span className="muted text-xs">
+            {t('analysis.credBodyFormat', { format: credentials.bodyFormat })}
+          </span>
+        )}
+        {reveal && (
+          <span className="badge badge--warning" title={t('analysis.credRevealHint')}>
+            {t('analysis.credRevealOn')}
+          </span>
+        )}
+      </div>
+      <dl className="credentials-card__items">
+        {items.map((it, i) => (
+          <div key={i} className={`credentials-card__row credentials-card__row--${it.tone}`}>
+            <dt>{it.label}</dt>
+            <dd>
+              <code>{it.value}</code>
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function LoginTransactionCard({
+  request,
+  response,
+  showRaw,
+}: {
+  request: RequestRecord;
+  response?: ResponseRecord;
+  showRaw: boolean;
+}) {
+  const { t } = useTranslation();
+  const reqHeaders = Object.entries(request.headers);
+  const resHeaders = response ? Object.entries(response.headers) : [];
+  const credentials = analyzeLoginCredentials(request);
+  return (
+    <div className="login-tx" style={{ marginTop: 'var(--space-3)' }}>
+      {hasAnyCredential(credentials) && (
+        <CredentialsCard credentials={credentials} reveal={showRaw} />
+      )}
+      <div className="login-tx__row">
+        <div className="login-tx__side">
+          <div className="login-tx__title">
+            <span className={`badge badge--${methodClass(request.method)}`}>
+              {request.method.toUpperCase()}
+            </span>
+            <code className="login-tx__url" title={request.url}>{request.url}</code>
+          </div>
+          <h4 className="login-tx__heading">{t('analysis.txRequestHeaders')}</h4>
+          {reqHeaders.length === 0 ? (
+            <p className="muted text-xs">{t('analysis.txNoHeaders')}</p>
+          ) : (
+            <dl className="kv-table">
+              {reqHeaders.map(([k, v]) => (
+                <Kv
+                  key={k}
+                  keyName={k}
+                  value={displaySensitive(v, showRaw)}
+                  sensitive={v.sensitivity !== 'none'}
+                />
+              ))}
+            </dl>
+          )}
+          {request.postData && (
+            <>
+              <h4 className="login-tx__heading">{t('analysis.txRequestBody')}</h4>
+              <pre className="login-tx__body">
+                {displaySensitive(request.postData, showRaw) || '(empty)'}
+              </pre>
+            </>
+          )}
+        </div>
+        <div className="login-tx__side">
+          <div className="login-tx__title">
+            {response ? (
+              <>
+                <span
+                  className={`badge ${response.status >= 400 ? 'badge--danger' : 'badge--success'}`}
+                >
+                  {response.status}
+                </span>
+                <span className="muted text-sm">{response.statusText}</span>
+              </>
+            ) : (
+              <span className="muted text-sm">{t('analysis.txNoResponse')}</span>
+            )}
+          </div>
+          <h4 className="login-tx__heading">{t('analysis.txResponseHeaders')}</h4>
+          {resHeaders.length === 0 ? (
+            <p className="muted text-xs">{t('analysis.txNoHeaders')}</p>
+          ) : (
+            <dl className="kv-table">
+              {resHeaders.map(([k, v]) => (
+                <Kv
+                  key={k}
+                  keyName={k}
+                  value={displaySensitive(v, showRaw)}
+                  sensitive={v.sensitivity !== 'none'}
+                />
+              ))}
+            </dl>
+          )}
+          {response?.bodyPreview && (
+            <>
+              <h4 className="login-tx__heading">
+                {t('analysis.txResponseBody')}
+                {response.isBinary && (
+                  <span className="muted text-xs"> ({t('analysis.txBinary')})</span>
+                )}
+              </h4>
+              <pre className="login-tx__body">
+                {displaySensitive(response.bodyPreview, showRaw) || '(empty)'}
+              </pre>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Kv({
+  keyName,
+  value,
+  sensitive,
+}: {
+  keyName: string;
+  value: string;
+  sensitive: boolean;
+}) {
+  return (
+    <>
+      <dt className="kv-table__key">
+        {keyName}
+        {sensitive && (
+          <span className="badge badge--warning kv-table__lock" title="masked">
+            🔒
+          </span>
+        )}
+      </dt>
+      <dd className="kv-table__val">
+        <code>{value}</code>
+      </dd>
+    </>
   );
 }
 

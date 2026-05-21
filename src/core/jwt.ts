@@ -14,8 +14,13 @@ export type DecodedJwt = {
   raw: string;
   header: JwtClaims;
   payload: JwtClaims;
-  /** signature는 항상 마스킹된 형태로만 노출 (보안적으로 민감). */
+  /** signature 마스킹 미리보기 (기본 표시용). */
   signaturePreview: string;
+  /**
+   * signature raw 값. 표시 여부는 UI/Reporter의 reveal 토글이 결정한다 —
+   * analyzer 계층은 데이터만 노출. (raw도 같은 값을 포함하지만 편의상 별도 노출)
+   */
+  signature: string;
   /** payload.exp가 있으면 Date로 변환. 없으면 undefined. */
   expiresAt?: Date;
   /** payload.iat가 있으면 Date로 변환. */
@@ -49,6 +54,7 @@ export function decodeJwt(token: string): DecodedJwt | undefined {
     header,
     payload,
     signaturePreview: signaturePreview(s!),
+    signature: s!,
   };
 
   if (typeof header.alg === 'string') result.algorithm = header.alg;

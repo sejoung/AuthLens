@@ -7,3 +7,5 @@ export * from './analyze.js';
 export * from './noteworthy.js';
 export * from './jwt-locations.js';
 export * from './oauth-flow.js';
+export * from './login-credentials.js';
+export * from './raw-presence.js';

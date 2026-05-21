@@ -1,8 +1,10 @@
 import { TOOL_NAME, TOOL_VERSION, SCHEMA_VERSION } from '@/core';
-import type { AuthEvent, AuthFlow, CookieDiff, StorageDiff } from '@/core';
+import type { AuthEvent, AuthFlow, CookieDiff, HeaderMap, StorageDiff } from '@/core';
 import {
+  analyzeLoginCredentials,
   findJwts,
   findOAuthFlow,
+  hasAnyCredential,
   isNoteworthyEvent,
   type JwtLocation,
 } from '@/analyzer';
@@ -63,6 +65,18 @@ export type ReportStrings = {
   labelScore: string;
   labelMethodUrl: string;
   reasonsLabel: string;
+  txRequestHeadersLabel: string;
+  txRequestBodyLabel: string;
+  txResponseLabel: string;
+  txResponseHeadersLabel: string;
+  txResponseBodyLabel: string;
+  txBinaryLabel: string;
+  credentialsHeading: string;
+  credBasicLabel: string;
+  credBearerLabel: string;
+  credUsernameFieldLabel: string;
+  credPasswordFieldLabel: string;
+  credBodyFormatLabel: string;
   noLoginCandidate1: string;
   noLoginCandidate2: string;
   cookieHeading: string;
@@ -93,6 +107,7 @@ export type ReportStrings = {
   jwtHeader: string;
   jwtPayload: string;
   jwtSignaturePreview: string;
+  jwtSignature: string;
   oauthHeading: string;
   oauthAuthorizeHeading: string;
   oauthTokenHeading: string;
@@ -134,6 +149,18 @@ export const DEFAULT_REPORT_STRINGS: ReportStrings = {
   labelScore: 'Score',
   labelMethodUrl: 'Method/URL',
   reasonsLabel: 'Reasons:',
+  txRequestHeadersLabel: 'Request headers',
+  txRequestBodyLabel: 'Request body',
+  txResponseLabel: 'Response',
+  txResponseHeadersLabel: 'Response headers',
+  txResponseBodyLabel: 'Response body preview',
+  txBinaryLabel: 'binary, excluded',
+  credentialsHeading: 'Credentials detected',
+  credBasicLabel: 'HTTP Basic',
+  credBearerLabel: 'Bearer token',
+  credUsernameFieldLabel: 'Body username field',
+  credPasswordFieldLabel: 'Body password field',
+  credBodyFormatLabel: 'Body format',
   noLoginCandidate1: 'No clear authentication request was detected.',
   noLoginCandidate2: 'You can manually select a request from the timeline.',
   cookieHeading: 'Cookie Changes',
@@ -171,6 +198,7 @@ export const DEFAULT_REPORT_STRINGS: ReportStrings = {
   jwtHeader: 'Header',
   jwtPayload: 'Payload',
   jwtSignaturePreview: 'Signature (masked)',
+  jwtSignature: 'Signature',
   oauthHeading: 'OAuth / OIDC flow',
   oauthAuthorizeHeading: 'Authorization request',
   oauthTokenHeading: 'Token exchange',
@@ -251,6 +279,7 @@ export function generateMarkdownReport(
   const top = flow.loginCandidates[0];
   if (top) {
     const req = flow.requests.find((r) => r.id === top.requestId);
+    const res = flow.responses.find((r) => r.requestId === top.requestId);
     out.push(`- **${s.labelScore}:** ${top.score} (${top.confidence})`);
     if (req) {
       out.push(`- **${s.labelMethodUrl}:** \`${req.method.toUpperCase()} ${req.url}\``);
@@ -260,6 +289,81 @@ export function generateMarkdownReport(
     out.push('');
     for (const r of top.reasons) {
       out.push(`- ${r}`);
+    }
+
+    if (req) {
+      const creds = analyzeLoginCredentials(req);
+      if (hasAnyCredential(creds)) {
+        const revealValues = opts.includeRaw === true && opts.enforceMasking !== true;
+        out.push('');
+        out.push(`**${s.credentialsHeading}**`);
+        out.push('');
+        if (creds.scheme === 'basic') {
+          if (creds.basicUsername !== undefined) {
+            const pw =
+              revealValues && creds.basicPassword !== undefined
+                ? creds.basicPassword
+                : '••••••••';
+            out.push(
+              `- ${s.credBasicLabel}: \`username=${creds.basicUsername}, password=${pw}\``,
+            );
+          } else {
+            out.push(`- ${s.credBasicLabel}: \`(masked)\``);
+          }
+        }
+        if (creds.scheme === 'bearer') {
+          const parts: string[] = [];
+          if (creds.bearerIsJwt) parts.push('JWT');
+          if (creds.bearerTokenLength) parts.push(`${creds.bearerTokenLength} chars`);
+          out.push(
+            `- ${s.credBearerLabel}: ${parts.length > 0 ? `_(${parts.join(', ')})_` : ''}`,
+          );
+        }
+        if (creds.usernameField) {
+          const v = creds.usernameValue ? ` = \`${creds.usernameValue}\`` : '';
+          out.push(`- ${s.credUsernameFieldLabel}: \`${creds.usernameField}\`${v}`);
+        }
+        if (creds.passwordField) {
+          const pw =
+            revealValues && creds.passwordValue !== undefined ? creds.passwordValue : '••••••••';
+          out.push(`- ${s.credPasswordFieldLabel}: \`${creds.passwordField} = ${pw}\``);
+        }
+        if (creds.bodyFormat) {
+          out.push(`- ${s.credBodyFormatLabel}: \`${creds.bodyFormat}\``);
+        }
+      }
+      out.push('');
+      out.push(`**${s.txRequestHeadersLabel}**`);
+      out.push('');
+      appendHeaderRows(out, req.headers, opts);
+      if (req.postData) {
+        out.push('');
+        out.push(`**${s.txRequestBodyLabel}**`);
+        out.push('');
+        out.push('```');
+        out.push(displayValue(req.postData, opts));
+        out.push('```');
+      }
+    }
+    if (res) {
+      out.push('');
+      out.push(
+        `**${s.txResponseLabel}** \`${res.status} ${res.statusText}\``,
+      );
+      out.push('');
+      out.push(`**${s.txResponseHeadersLabel}**`);
+      out.push('');
+      appendHeaderRows(out, res.headers, opts);
+      if (res.bodyPreview) {
+        out.push('');
+        out.push(
+          `**${s.txResponseBodyLabel}**${res.isBinary ? ` _(${s.txBinaryLabel})_` : ''}`,
+        );
+        out.push('');
+        out.push('```');
+        out.push(displayValue(res.bodyPreview, opts));
+        out.push('```');
+      }
     }
   } else {
     out.push(s.noLoginCandidate1);
@@ -481,7 +585,12 @@ export function generateMarkdownReport(
           `- **${s.jwtExpiresAt}:** ${j.decoded.expiresAt.toISOString()} _(${status})_`,
         );
       }
-      claims.push(`- **${s.jwtSignaturePreview}:** \`${j.decoded.signaturePreview}\``);
+      const revealSig = opts.includeRaw === true && opts.enforceMasking !== true;
+      claims.push(
+        revealSig
+          ? `- **${s.jwtSignature}:** \`${j.decoded.signature}\``
+          : `- **${s.jwtSignaturePreview}:** \`${j.decoded.signaturePreview}\``,
+      );
       for (const line of claims) out.push(line);
       out.push('');
       out.push(`**${s.jwtHeader}:**`);
@@ -514,6 +623,22 @@ export function generateMarkdownReport(
   out.push('');
 
   return out.join('\n');
+}
+
+function appendHeaderRows(
+  out: string[],
+  headers: HeaderMap,
+  opts: MarkdownOptions,
+) {
+  const entries = Object.entries(headers);
+  if (entries.length === 0) {
+    out.push('_(none)_');
+    return;
+  }
+  for (const [k, v] of entries) {
+    const value = opts.includeRaw && !opts.enforceMasking && v.raw ? v.raw : v.masked;
+    out.push(`- \`${k}\`: \`${value}\``);
+  }
 }
 
 function cookieValueDisplay(

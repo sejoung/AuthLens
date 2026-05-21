@@ -4,8 +4,9 @@ import { generateMermaidDiagram } from '@/reporter/mermaid';
 import { stringifyJsonExport } from '@/reporter/json-export';
 import { toCurlCommand, toFetchSnippet } from '@/reporter/curl-fetch';
 import {
-  toSensitiveValue,
+  maskBodyText,
   maskHeaders,
+  toSensitiveValue,
   type AuthFlow,
   type CookieDiff,
   type StorageDiff,
@@ -20,7 +21,9 @@ function buildSampleFlow(): { flow: AuthFlow; cookieDiff: CookieDiff; storageDif
       'content-type': 'application/json',
       authorization: 'Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig',
     }),
-    postData: toSensitiveValue('body', JSON.stringify({ email: 'a@b.com', password: 'x' })),
+    postData: maskBodyText(
+      JSON.stringify({ email: 'a@b.com', password: 'super-secret-pw' }),
+    ),
     resourceType: 'fetch',
     timestamp: '2026-01-01T00:00:00.000Z',
   };
@@ -159,6 +162,26 @@ describe('generateMarkdownReport', () => {
       enforceMasking: true,
     });
     expect(md).not.toContain('abc1234567def');
+  });
+});
+
+describe('generateMarkdownReport credentials reveal', () => {
+  it('masks body password by default; reveals when includeRaw=true', () => {
+    const { flow, cookieDiff, storageDiff } = buildSampleFlow();
+    // sample flow's login request has JSON body with email/password
+    // (built with maskBodyText so raw is preserved when default policy revealRaw=true)
+    const masked = generateMarkdownReport(flow, cookieDiff, storageDiff, {
+      includeRaw: false,
+    });
+    expect(masked).toContain('Credentials detected');
+    // password value must be hidden in default mode
+    expect(masked).not.toContain('super-secret-pw');
+    expect(masked).toContain('••••••••');
+
+    const revealed = generateMarkdownReport(flow, cookieDiff, storageDiff, {
+      includeRaw: true,
+    });
+    expect(revealed).toContain('super-secret-pw');
   });
 });
 

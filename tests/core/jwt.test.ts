@@ -43,11 +43,13 @@ describe('decodeJwt', () => {
     expect(decodeJwt(token)!.expired).toBe(false);
   });
 
-  it('masks the signature', () => {
+  it('exposes both masked preview and raw signature', () => {
     const token = makeJwt({ alg: 'HS256' }, { sub: 'x' });
     const decoded = decodeJwt(token)!;
     expect(decoded.signaturePreview).not.toBe('fakeSignatureValueHere');
     expect(decoded.signaturePreview.startsWith('fake')).toBe(true);
+    // Raw signature available for callers that opt in
+    expect(decoded.signature).toBe('fakeSignatureValueHere');
   });
 
   it('returns undefined when header is not a JSON object', () => {

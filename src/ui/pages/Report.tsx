@@ -1,34 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { diffCookies, diffStorage } from '@/analyzer';
+import { diffCookies, diffStorage, flowContainsRaw } from '@/analyzer';
 import { generateMarkdownReport, stringifyJsonExport } from '@/reporter';
-import type { AuthFlow } from '@/core';
 import { store, useAppState } from '../state/store.js';
 import { MarkdownPreview } from '../components/MarkdownPreview.js';
 import { useReportStrings } from '../i18n/useReportStrings.js';
 
 type Tab = 'preview' | 'markdown' | 'json';
-
-/** Heuristic: does this flow carry any raw sensitive values? */
-function flowContainsRaw(flow: AuthFlow | undefined): boolean {
-  if (!flow) return false;
-  for (const c of flow.cookiesAfter) {
-    if (c.value.raw !== undefined && c.value.sensitivity !== 'none') return true;
-  }
-  for (const req of flow.requests) {
-    for (const v of Object.values(req.headers)) {
-      if (v.raw !== undefined && v.sensitivity !== 'none') return true;
-    }
-    if (req.postData?.raw !== undefined && req.postData.sensitivity !== 'none') return true;
-  }
-  for (const res of flow.responses) {
-    for (const v of Object.values(res.headers)) {
-      if (v.raw !== undefined && v.sensitivity !== 'none') return true;
-    }
-    if (res.bodyPreview?.raw !== undefined && res.bodyPreview.sensitivity !== 'none') return true;
-  }
-  return false;
-}
 
 export function ReportPage() {
   const state = useAppState();

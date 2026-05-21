@@ -33,10 +33,13 @@ export function findAuthorizationHeader(headers: HeaderMap): SensitiveValue | un
 }
 
 /**
- * Basic 헤더의 raw 값에서 `Basic dXNlcm5hbWU6cGFzc3dvcmQ=` → `username` 추출.
- * password는 절대 반환하지 않음. raw가 없거나 디코드 실패 시 undefined.
+ * Basic 헤더에서 base64 디코드해 `{ username, password }` 반환.
+ * raw가 없거나 디코드 실패 시 undefined.
+ * 호출자가 표시 여부를 결정한다 — analyzer 계층은 데이터만 노출.
  */
-export function decodeBasicUsername(value: SensitiveValue): string | undefined {
+export function decodeBasicCredentials(
+  value: SensitiveValue,
+): { username: string; password: string } | undefined {
   const raw = value.raw;
   if (!raw) return undefined;
   const match = /^basic\s+(\S+)/i.exec(raw);
@@ -48,7 +51,6 @@ export function decodeBasicUsername(value: SensitiveValue): string | undefined {
     if (g.atob) {
       decoded = g.atob(b64);
     } else {
-      // Node fallback
       const bufCtor = (globalThis as { Buffer?: { from: (s: string, e: string) => { toString: (e: string) => string } } })
         .Buffer;
       if (!bufCtor) return undefined;
@@ -56,8 +58,13 @@ export function decodeBasicUsername(value: SensitiveValue): string | undefined {
     }
     const colon = decoded.indexOf(':');
     if (colon < 0) return undefined;
-    return decoded.slice(0, colon);
+    return { username: decoded.slice(0, colon), password: decoded.slice(colon + 1) };
   } catch {
     return undefined;
   }
+}
+
+/** 호환용 — username만 필요할 때. */
+export function decodeBasicUsername(value: SensitiveValue): string | undefined {
+  return decodeBasicCredentials(value)?.username;
 }
