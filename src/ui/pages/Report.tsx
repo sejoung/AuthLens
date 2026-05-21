@@ -5,6 +5,7 @@ import { generateMarkdownReport, stringifyJsonExport } from '@/reporter';
 import type { AuthFlow } from '@/core';
 import { store, useAppState } from '../state/store.js';
 import { MarkdownPreview } from '../components/MarkdownPreview.js';
+import { useReportStrings } from '../i18n/useReportStrings.js';
 
 type Tab = 'preview' | 'markdown' | 'json';
 
@@ -39,17 +40,22 @@ export function ReportPage() {
   const flow = state.activeFlow;
   const rawAvailable = flowContainsRaw(flow);
   const effectiveIncludeRaw = includeRaw && rawAvailable;
+  const reportStrings = useReportStrings();
   const { markdown, json } = useMemo(() => {
     if (!flow) return { markdown: '', json: '' };
     const cookieDiff = diffCookies(flow.cookiesBefore, flow.cookiesAfter);
     const storageDiff = diffStorage(flow.storageBefore, flow.storageAfter);
     return {
-      markdown: generateMarkdownReport(flow, cookieDiff, storageDiff, {
-        includeRaw: effectiveIncludeRaw,
-      }),
+      markdown: generateMarkdownReport(
+        flow,
+        cookieDiff,
+        storageDiff,
+        { includeRaw: effectiveIncludeRaw },
+        reportStrings,
+      ),
       json: stringifyJsonExport(flow, { includeRaw: effectiveIncludeRaw }),
     };
-  }, [flow, effectiveIncludeRaw]);
+  }, [flow, effectiveIncludeRaw, reportStrings]);
 
   if (!flow) {
     return (
