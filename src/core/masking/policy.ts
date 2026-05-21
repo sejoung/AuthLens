@@ -9,7 +9,16 @@ import type {
 } from '../types/sensitive.js';
 
 export type MaskingPolicy = {
-  /** UI/export에서 raw 값을 노출할지 여부. 기본 false. */
+  /**
+   * 메모리에 raw 값을 보관할지 여부. 기본 true.
+   *
+   * 정책: raw는 메모리에서만 임시 사용되며, persistence 계층(SQLite/InMemoryStore)이
+   * `stripRaw`로 저장 직전에 제거합니다. (ARCHITECTURE.md §11, §12 참조)
+   *
+   * UI나 export에서 raw를 "노출"할지는 `MarkdownOptions.includeRaw` 등 별도 플래그가
+   * 결정합니다. 이 값을 false로 두면 메모리에도 raw를 두지 않습니다 — CLI 등 추가
+   * 안전 마진이 필요한 환경에서 사용하세요.
+   */
   revealRaw: boolean;
   /** mask prefix 길이 (앞에서 몇 글자를 보여줄지). 기본 4. */
   previewLength: number;
@@ -18,7 +27,7 @@ export type MaskingPolicy = {
 };
 
 export const DEFAULT_MASKING_POLICY: MaskingPolicy = {
-  revealRaw: false,
+  revealRaw: true,
   previewLength: MASK_PREVIEW_LENGTH,
   extraKeys: new Set(),
 };

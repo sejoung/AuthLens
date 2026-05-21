@@ -93,7 +93,7 @@
     "tabJson": "JSON",
     "includeRaw": "Include raw values",
     "rawWarning": "⚠ Raw sensitive values are included. Only share with authorized reviewers.",
-    "rawUnavailable": "Raw values were not captured. Enable “Reveal raw values by default” in Settings and re-run the capture to make raw values available."
+    "rawUnavailable": "This capture was loaded from local storage, so raw values were stripped before persistence. Run a fresh capture to see raw values."
   },
   "settings": {
     "eyebrow": "Settings",
@@ -101,8 +101,8 @@
     "lede": "Defaults err on the side of safety: small body capture limit, masked sensitive values, and disabled experimental features.",
     "maskingTitle": "Masking policy",
     "revealRaw": "Reveal raw values by default",
-    "revealRawDesc": "Not recommended. Raw values are still hidden from exports unless explicitly opted-in per export. Applies to captures started after this change — re-run the capture to make raw values available.",
-    "revealRawWarning": "⚠ Raw sensitive values will be kept in memory for new captures. They are still stripped before persistence to local storage.",
+    "revealRawDesc": "Pre-selects the “Include raw values” option in the Report view. Raw values are always held in memory while the app is running, but are stripped before persistence to local storage and excluded from exports unless this option is on.",
+    "revealRawWarning": "⚠ Open reports may show raw sensitive values. Review before sharing screenshots or exports.",
     "captureTitle": "Capture options",
     "bodyLimit": "Response body preview limit (bytes)",
     "headful": "Open browser in headful mode",

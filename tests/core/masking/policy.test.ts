@@ -95,11 +95,22 @@ describe('classifySensitivity', () => {
 });
 
 describe('toSensitiveValue', () => {
-  it('masks password-like keys', () => {
+  it('masks password-like keys but keeps raw in memory by default', () => {
+    // Policy: raw lives in memory; persistence layer strips it via stripRaw.
+    // Display/export is gated separately by includeRaw flag in reporter.
     const v = toSensitiveValue('password', 'hunter22');
     expect(v.masked).not.toContain('hunter');
-    expect(v.raw).toBeUndefined();
+    expect(v.raw).toBe('hunter22');
     expect(v.sensitivity).toBe('high');
+  });
+
+  it('omits raw when policy.revealRaw is explicitly false', () => {
+    const v = toSensitiveValue('password', 'hunter22', {
+      ...DEFAULT_MASKING_POLICY,
+      revealRaw: false,
+    });
+    expect(v.raw).toBeUndefined();
+    expect(v.masked).not.toContain('hunter');
   });
 
   it('preserves non-sensitive values', () => {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { diffCookies, diffStorage } from '@/analyzer';
 import { generateMarkdownReport, stringifyJsonExport } from '@/reporter';
@@ -36,6 +36,11 @@ export function ReportPage() {
   const [tab, setTab] = useState<Tab>('preview');
   const [includeRaw, setIncludeRaw] = useState(state.settings.revealRawByDefault);
   const [copied, setCopied] = useState(false);
+
+  // Settings.revealRawByDefault가 외부에서 바뀌면 Report 미리보기도 즉시 반영.
+  useEffect(() => {
+    setIncludeRaw(state.settings.revealRawByDefault);
+  }, [state.settings.revealRawByDefault]);
 
   const flow = state.activeFlow;
   const rawAvailable = flowContainsRaw(flow);
