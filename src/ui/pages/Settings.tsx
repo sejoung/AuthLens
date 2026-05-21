@@ -1,24 +1,51 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { store, useAppState } from '../state/store.js';
+import { changeLanguage, currentLanguage, SUPPORTED_LANGS } from '../i18n/index.js';
 
 export function SettingsPage() {
   const state = useAppState();
+  const { t } = useTranslation();
   const { settings } = state;
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const lang = currentLanguage();
 
   return (
     <div className="stack" style={{ gap: 'var(--space-6)' }}>
       <header className="page-header">
-        <span className="page-header__eyebrow">Settings</span>
-        <h1 className="page-header__title">Capture & masking policy</h1>
-        <p className="page-header__lede">
-          Defaults err on the side of safety: small body capture limit, masked sensitive values,
-          and disabled experimental features.
-        </p>
+        <span className="page-header__eyebrow">{t('settings.eyebrow')}</span>
+        <h1 className="page-header__title">{t('settings.title')}</h1>
+        <p className="page-header__lede">{t('settings.lede')}</p>
       </header>
 
       <div className="card">
-        <h2 className="card__title">Masking policy</h2>
+        <h2 className="card__title">{t('settings.languageTitle')}</h2>
+        <p className="muted text-sm">{t('settings.languageDesc')}</p>
+        <div
+          className="row"
+          role="radiogroup"
+          aria-label={t('settings.languageTitle')}
+          style={{ marginTop: 'var(--space-3)' }}
+        >
+          {SUPPORTED_LANGS.map((code) => (
+            <label key={code} className="row text-sm" style={{ gap: 'var(--space-2)' }}>
+              <input
+                type="radio"
+                name="language"
+                value={code}
+                checked={lang === code}
+                onChange={() => {
+                  void changeLanguage(code);
+                }}
+              />
+              <span>{t(`settings.language${code === 'en' ? 'En' : 'Ko'}`)}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <h2 className="card__title">{t('settings.maskingTitle')}</h2>
         <div className="stack">
           <label className="row text-sm">
             <input
@@ -29,21 +56,23 @@ export function SettingsPage() {
               }
             />
             <span>
-              Reveal raw values by default
-              <div className="muted text-xs">
-                Not recommended. Raw values are still hidden from exports unless explicitly
-                opted-in per export.
-              </div>
+              {t('settings.revealRaw')}
+              <div className="muted text-xs">{t('settings.revealRawDesc')}</div>
             </span>
           </label>
+          {settings.revealRawByDefault && (
+            <div className="reveal-warning text-xs" role="alert">
+              {t('settings.revealRawWarning')}
+            </div>
+          )}
         </div>
       </div>
 
       <div className="card">
-        <h2 className="card__title">Capture options</h2>
+        <h2 className="card__title">{t('settings.captureTitle')}</h2>
         <div className="stack">
           <label className="row text-sm">
-            <span style={{ flex: 1 }}>Response body preview limit (bytes)</span>
+            <span style={{ flex: 1 }}>{t('settings.bodyLimit')}</span>
             <input
               type="number"
               className="input"
@@ -64,20 +93,16 @@ export function SettingsPage() {
               onChange={(e) => store.updateSettings({ headful: e.target.checked })}
             />
             <span>
-              Open browser in headful mode
-              <div className="muted text-xs">
-                Required for manual login. Disabling is rarely useful.
-              </div>
+              {t('settings.headful')}
+              <div className="muted text-xs">{t('settings.headfulDesc')}</div>
             </span>
           </label>
         </div>
       </div>
 
       <div className="card">
-        <h2 className="card__title">Experimental features</h2>
-        <p className="muted text-sm">
-          Off by default. Read the safety notes in the documentation before enabling.
-        </p>
+        <h2 className="card__title">{t('settings.experimentalTitle')}</h2>
+        <p className="muted text-sm">{t('settings.experimentalDesc')}</p>
         <label className="row text-sm" style={{ marginTop: 'var(--space-3)' }}>
           <input
             type="checkbox"
@@ -87,30 +112,23 @@ export function SettingsPage() {
             }
           />
           <span>
-            Enable replay sandbox
-            <div className="muted text-xs">
-              Replay sends the selected request to a mock endpoint after stripping sensitive
-              values. Never replays against the original origin automatically.
-            </div>
+            {t('settings.replay')}
+            <div className="muted text-xs">{t('settings.replayDesc')}</div>
           </span>
         </label>
       </div>
 
       <div className="card">
-        <h2 className="card__title">Data</h2>
-        <p className="muted text-sm">
-          Captures are stored locally. Delete them anytime.
-        </p>
+        <h2 className="card__title">{t('settings.dataTitle')}</h2>
+        <p className="muted text-sm">{t('settings.dataDesc')}</p>
         <div className="row" style={{ marginTop: 'var(--space-3)' }}>
           {!confirmDelete ? (
             <button className="btn btn--danger" onClick={() => setConfirmDelete(true)}>
-              Delete all captures
+              {t('settings.deleteAll')}
             </button>
           ) : (
             <>
-              <span className="text-sm reveal-warning">
-                This will remove every saved capture. This cannot be undone.
-              </span>
+              <span className="text-sm reveal-warning">{t('settings.deleteAllConfirm')}</span>
               <button
                 className="btn btn--danger"
                 onClick={async () => {
@@ -118,10 +136,10 @@ export function SettingsPage() {
                   setConfirmDelete(false);
                 }}
               >
-                Yes, delete everything
+                {t('settings.deleteAllYes')}
               </button>
               <button className="btn btn--secondary" onClick={() => setConfirmDelete(false)}>
-                Cancel
+                {t('common.cancel')}
               </button>
             </>
           )}

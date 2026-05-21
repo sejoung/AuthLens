@@ -1,18 +1,20 @@
+import { useTranslation } from 'react-i18next';
 import type { Route } from '../state/store.js';
 import { store, useAppState } from '../state/store.js';
 
-const ITEMS: Array<{ id: Route; label: string; icon: string }> = [
-  { id: 'home', label: 'Home', icon: '◌' },
-  { id: 'capture', label: 'Capture', icon: '◎' },
-  { id: 'analysis', label: 'Analysis', icon: '⊚' },
-  { id: 'report', label: 'Reports', icon: '☰' },
-  { id: 'settings', label: 'Settings', icon: '⚙' },
+const ITEMS: Array<{ id: Route; labelKey: string; icon: string }> = [
+  { id: 'home', labelKey: 'nav.home', icon: '◌' },
+  { id: 'capture', labelKey: 'nav.capture', icon: '◎' },
+  { id: 'analysis', labelKey: 'nav.analysis', icon: '⊚' },
+  { id: 'report', labelKey: 'nav.reports', icon: '☰' },
+  { id: 'settings', labelKey: 'nav.settings', icon: '⚙' },
 ];
 
 export function Sidebar() {
   const state = useAppState();
+  const { t } = useTranslation();
   return (
-    <nav className="sidebar" aria-label="Primary navigation">
+    <nav className="sidebar" aria-label={t('nav.home') /* a11y label */}>
       {ITEMS.map((item) => {
         const active = state.route === item.id;
         return (
@@ -26,7 +28,7 @@ export function Sidebar() {
             <span className="sidebar__icon" aria-hidden="true">
               {item.icon}
             </span>
-            <span>{item.label}</span>
+            <span>{t(item.labelKey)}</span>
           </button>
         );
       })}

@@ -106,10 +106,5 @@ export const DIAGRAM_EXCLUDED_RESOURCE_TYPES: readonly string[] = [
   'media',
 ];
 
-/**
- * 첫 실행 안내 문구 (DESIGN_GUIDE.md 15절).
- */
-export const FIRST_LAUNCH_NOTICE =
-  'AuthLens is designed for authorized systems only. ' +
-  'Use it for internal debugging, QA, documentation, and authentication flow analysis. ' +
-  'Unauthorized use against third-party services may violate laws or terms of service.';
+// 첫 실행 안내 문구는 UI i18n 키 `firstLaunch.noticeBody`로 관리됩니다.
+// (src/ui/i18n/locales/*.json)

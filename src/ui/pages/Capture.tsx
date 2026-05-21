@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { store, useAppState } from '../state/store.js';
 import { createDemoAuthFlow } from '../demo/sampleFlow.js';
 
 export function CapturePage() {
   const state = useAppState();
+  const { t } = useTranslation();
 
-  // In a Tauri build, Playwright runs in the Rust backend.
-  // For the web preview, we simulate live requests so the UI is functional.
   useEffect(() => {
     if (state.captureStatus !== 'running') return;
     let cancelled = false;
@@ -40,8 +40,9 @@ export function CapturePage() {
 
   const stop = () => {
     store.stopCapture();
-    // synthesize flow from demo data using the entered URL
-    const flow = createDemoAuthFlow(state.targetUrl);
+    const flow = createDemoAuthFlow(state.targetUrl, {
+      revealRaw: state.settings.revealRawByDefault,
+    });
     store.setActiveFlow(flow);
     void store.saveActiveFlow();
   };
@@ -49,9 +50,9 @@ export function CapturePage() {
   if (state.captureStatus !== 'running' && !state.activeFlow) {
     return (
       <div className="empty-state">
-        <p>No active capture. Start one from the Home page.</p>
+        <p>{t('capture.noActive')}</p>
         <button className="btn btn--primary" onClick={() => store.navigate('home')}>
-          Go Home
+          {t('common.goHome')}
         </button>
       </div>
     );
@@ -60,43 +61,43 @@ export function CapturePage() {
   return (
     <div className="stack" style={{ gap: 'var(--space-6)' }}>
       <header className="page-header">
-        <span className="page-header__eyebrow">Capture</span>
-        <h1 className="page-header__title">Recording session</h1>
-        <p className="page-header__lede">
-          Sign in on the browser window. AuthLens is observing requests, responses, and
-          storage changes. No automation is performed.
-        </p>
+        <span className="page-header__eyebrow">{t('capture.eyebrow')}</span>
+        <h1 className="page-header__title">{t('capture.title')}</h1>
+        <p className="page-header__lede">{t('capture.lede')}</p>
       </header>
 
       <div className="card">
         <div className="row row--between">
           <div className="stack" style={{ gap: 'var(--space-1)' }}>
-            <div className="text-xs muted">Target</div>
+            <div className="text-xs muted">{t('capture.labelTarget')}</div>
             <code>{state.targetUrl || '—'}</code>
           </div>
           <div className="row" style={{ gap: 'var(--space-6)' }}>
-            <Metric label="Requests" value={state.captureStats.requestCount} />
-            <Metric label="Auth candidates" value={state.captureStats.authCandidateCount} />
+            <Metric label={t('capture.labelRequests')} value={state.captureStats.requestCount} />
+            <Metric
+              label={t('capture.labelAuthCandidates')}
+              value={state.captureStats.authCandidateCount}
+            />
           </div>
           <button className="btn btn--danger" onClick={stop}>
-            Stop Capture
+            {t('capture.stop')}
           </button>
         </div>
       </div>
 
       <div className="card">
-        <h2 className="card__title">Live network</h2>
+        <h2 className="card__title">{t('capture.liveNetwork')}</h2>
         {state.liveRequests.length === 0 ? (
-          <div className="empty-state">Waiting for traffic…</div>
+          <div className="empty-state">{t('capture.waiting')}</div>
         ) : (
           <table className="request-list">
             <thead>
               <tr>
-                <th>Time</th>
-                <th>Method</th>
-                <th>URL</th>
-                <th>Status</th>
-                <th>Tags</th>
+                <th>{t('capture.headerTime')}</th>
+                <th>{t('capture.headerMethod')}</th>
+                <th>{t('capture.headerUrl')}</th>
+                <th>{t('capture.headerStatus')}</th>
+                <th>{t('capture.headerTags')}</th>
               </tr>
             </thead>
             <tbody>
@@ -120,7 +121,7 @@ export function CapturePage() {
                   </td>
                   <td>
                     {r.isLoginCandidate ? (
-                      <span className="badge badge--info">Login Candidate</span>
+                      <span className="badge badge--info">{t('capture.loginCandidate')}</span>
                     ) : null}
                   </td>
                 </tr>

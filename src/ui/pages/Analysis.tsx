@@ -1,10 +1,13 @@
 import { useMemo } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { diffCookies, diffStorage } from '@/analyzer';
 import { generateMermaidDiagram } from '@/reporter';
 import { store, useAppState } from '../state/store.js';
+import { MermaidDiagram } from '../components/MermaidDiagram.js';
 
 export function AnalysisPage() {
   const state = useAppState();
+  const { t } = useTranslation();
   const flow = state.activeFlow;
 
   const { cookieDiff, storageDiff } = useMemo(() => {
@@ -20,9 +23,9 @@ export function AnalysisPage() {
   if (!flow) {
     return (
       <div className="empty-state">
-        <p>No analysis yet. Run a capture or open the demo flow from Home.</p>
+        <p>{t('analysis.noActive')}</p>
         <button className="btn btn--primary" onClick={() => store.navigate('home')}>
-          Go Home
+          {t('common.goHome')}
         </button>
       </div>
     );
@@ -34,27 +37,34 @@ export function AnalysisPage() {
   return (
     <div className="stack" style={{ gap: 'var(--space-6)' }}>
       <header className="page-header">
-        <span className="page-header__eyebrow">Analysis</span>
-        <h1 className="page-header__title">Authentication summary</h1>
+        <span className="page-header__eyebrow">{t('analysis.eyebrow')}</span>
+        <h1 className="page-header__title">{t('analysis.title')}</h1>
         <p className="page-header__lede">
-          Detected authentication style for <code>{flow.targetUrl}</code>.
+          <Trans
+            i18nKey="analysis.ledeFor"
+            values={{ url: flow.targetUrl }}
+            components={{ code: <code /> }}
+          />
         </p>
       </header>
 
       <div className="card-grid">
         <SummaryCard
-          title="Auth type"
+          title={t('analysis.cardAuthType')}
           value={summary?.authType ?? 'unknown'}
-          description={`Confidence: ${summary?.confidence.toFixed(0) ?? 0} (${summary?.confidenceLevel ?? 'low'})`}
+          description={t('analysis.confidenceLine', {
+            score: summary?.confidence.toFixed(0) ?? 0,
+            level: summary?.confidenceLevel ?? 'low',
+          })}
           badge={summary?.authType}
         />
         <SummaryCard
-          title="Login candidate"
-          value={topCandidate ? `score ${topCandidate.score}` : '—'}
-          description={topCandidate?.confidence ?? 'No candidate'}
+          title={t('analysis.cardLoginCandidate')}
+          value={topCandidate ? t('analysis.scoreLabel', { score: topCandidate.score }) : '—'}
+          description={topCandidate?.confidence ?? t('analysis.noCandidate')}
         />
         <SummaryCard
-          title="Cookie changes"
+          title={t('analysis.cardCookieChanges')}
           value={String(
             (cookieDiff?.added.length ?? 0) +
               (cookieDiff?.changed.length ?? 0) +
@@ -63,22 +73,24 @@ export function AnalysisPage() {
           description={`+${cookieDiff?.added.length ?? 0} / ~${cookieDiff?.changed.length ?? 0} / -${cookieDiff?.removed.length ?? 0}`}
         />
         <SummaryCard
-          title="Storage changes"
+          title={t('analysis.cardStorageChanges')}
           value={String(
             (storageDiff?.localStorage.added.length ?? 0) +
               (storageDiff?.sessionStorage.added.length ?? 0),
           )}
-          description="new keys captured"
+          description={t('analysis.newKeys')}
         />
       </div>
 
       {summary && summary.warnings.length > 0 && (
         <div className="card">
-          <h2 className="card__title">Security notes</h2>
+          <h2 className="card__title">{t('analysis.securityNotes')}</h2>
           <ul>
             {summary.warnings.map((w, i) => (
               <li key={i}>
-                <span className={`badge badge--${w.level === 'danger' ? 'danger' : w.level === 'warning' ? 'warning' : 'info'}`}>
+                <span
+                  className={`badge badge--${w.level === 'danger' ? 'danger' : w.level === 'warning' ? 'warning' : 'info'}`}
+                >
                   {w.level}
                 </span>{' '}
                 {w.message}
@@ -89,7 +101,7 @@ export function AnalysisPage() {
       )}
 
       <div className="card">
-        <h2 className="card__title">Timeline</h2>
+        <h2 className="card__title">{t('analysis.timeline')}</h2>
         <ol className="stack" style={{ paddingLeft: 'var(--space-5)' }}>
           {flow.steps.map((step) => (
             <li key={step.id} style={{ marginBottom: 'var(--space-2)' }}>
@@ -100,22 +112,20 @@ export function AnalysisPage() {
       </div>
 
       <div className="card">
-        <h2 className="card__title">Mermaid preview</h2>
-        <p className="muted text-sm">
-          Copy this into a Mermaid renderer or markdown viewer to see the sequence diagram.
-        </p>
-        <pre className="mermaid-preview">{mermaid}</pre>
+        <h2 className="card__title">{t('analysis.mermaidPreview')}</h2>
+        <p className="muted text-sm">{t('analysis.mermaidHint')}</p>
+        <MermaidDiagram code={mermaid} />
       </div>
 
       <div className="card">
-        <h2 className="card__title">Request list</h2>
+        <h2 className="card__title">{t('analysis.requestList')}</h2>
         <table className="request-list">
           <thead>
             <tr>
-              <th>Method</th>
-              <th>URL</th>
-              <th>Resource</th>
-              <th>Time</th>
+              <th>{t('capture.headerMethod')}</th>
+              <th>{t('capture.headerUrl')}</th>
+              <th>{t('capture.headerTime')}</th>
+              <th>{t('capture.headerTags')}</th>
             </tr>
           </thead>
           <tbody>
@@ -129,8 +139,8 @@ export function AnalysisPage() {
                   <td>
                     <code>{r.url}</code>
                   </td>
-                  <td className="muted text-xs">{r.resourceType}</td>
                   <td className="muted text-xs">{r.timestamp}</td>
+                  <td className="muted text-xs">{r.resourceType}</td>
                 </tr>
               );
             })}
@@ -140,7 +150,7 @@ export function AnalysisPage() {
 
       <div className="row row--end">
         <button className="btn btn--primary" onClick={() => store.navigate('report')}>
-          View Report
+          {t('analysis.viewReport')}
         </button>
       </div>
     </div>

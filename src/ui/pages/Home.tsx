@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { store, useAppState } from '../state/store.js';
 import { createDemoAuthFlow } from '../demo/sampleFlow.js';
 
 export function HomePage() {
   const state = useAppState();
+  const { t } = useTranslation();
   const [url, setUrl] = useState(state.targetUrl);
   const [error, setError] = useState<string | undefined>();
 
@@ -11,18 +13,17 @@ export function HomePage() {
     setError(undefined);
     const trimmed = url.trim();
     if (!trimmed) {
-      setError('Please enter a URL.');
+      setError(t('home.errorMissing'));
       return;
     }
     try {
-      // Validate URL — let WHATWG URL throw if invalid.
       const parsed = new URL(trimmed);
       if (!/^https?:$/.test(parsed.protocol)) {
-        setError('Only http and https URLs are supported.');
+        setError(t('home.errorScheme'));
         return;
       }
     } catch {
-      setError('That does not look like a valid URL.');
+      setError(t('home.errorInvalid'));
       return;
     }
 
@@ -30,8 +31,9 @@ export function HomePage() {
     if (mode === 'capture') {
       await store.startCapture(url);
     } else {
-      // Demo: jump straight to analysis with sample data
-      const flow = createDemoAuthFlow(url);
+      const flow = createDemoAuthFlow(url, {
+        revealRaw: state.settings.revealRawByDefault,
+      });
       store.setActiveFlow(flow);
       await store.saveActiveFlow();
     }
@@ -40,41 +42,31 @@ export function HomePage() {
   return (
     <div className="stack" style={{ gap: 'var(--space-8)' }}>
       <header className="page-header">
-        <span className="page-header__eyebrow">Home</span>
-        <h1 className="page-header__title">Inspect an authentication flow</h1>
-        <p className="page-header__lede">
-          Enter a web application URL. AuthLens helps you visualize and document how its
-          authentication works — you sign in, we observe.
-        </p>
+        <span className="page-header__eyebrow">{t('home.eyebrow')}</span>
+        <h1 className="page-header__title">{t('home.title')}</h1>
+        <p className="page-header__lede">{t('home.lede')}</p>
       </header>
 
       <div className="notice-banner" role="note">
         <span aria-hidden="true">◎</span>
         <div>
-          <div className="notice-banner__title">Authorized systems only</div>
-          <p className="notice-banner__body">
-            Use AuthLens for internal debugging, QA, documentation, and authentication flow
-            analysis. Unauthorized use against third-party services may violate laws or terms
-            of service.
-          </p>
+          <div className="notice-banner__title">{t('home.noticeTitle')}</div>
+          <p className="notice-banner__body">{t('home.noticeBody')}</p>
         </div>
       </div>
 
       <div className="card">
-        <h2 className="card__title">Start a capture</h2>
-        <p className="card__lede">
-          AuthLens will open a browser session for the URL below. Sign in normally — we record
-          requests, responses, cookies, and storage changes.
-        </p>
+        <h2 className="card__title">{t('home.startCardTitle')}</h2>
+        <p className="card__lede">{t('home.startCardLede')}</p>
         <div className="stack" style={{ marginTop: 'var(--space-5)' }}>
           <label className="text-sm muted" htmlFor="target-url">
-            Target URL
+            {t('home.urlLabel')}
           </label>
           <input
             id="target-url"
             className="input"
             type="url"
-            placeholder="https://app.example.com/login"
+            placeholder={t('home.urlPlaceholder')}
             value={url}
             onChange={(e) => setUrl(e.target.value)}
           />
@@ -85,10 +77,10 @@ export function HomePage() {
           )}
           <div className="row" style={{ marginTop: 'var(--space-2)' }}>
             <button className="btn btn--primary" onClick={() => submit('capture')}>
-              Start Capture
+              {t('home.startCapture')}
             </button>
             <button className="btn btn--secondary" onClick={() => submit('demo')}>
-              Open demo flow
+              {t('home.openDemo')}
             </button>
           </div>
         </div>
@@ -101,26 +93,24 @@ export function HomePage() {
 
 function RecentSessionList() {
   const state = useAppState();
+  const { t } = useTranslation();
   if (state.recentSessions.length === 0) {
     return (
       <div className="card">
-        <h2 className="card__title">Recent captures</h2>
-        <div className="empty-state">
-          Start by entering a web application URL. AuthLens will help you visualize and document
-          its authentication flow.
-        </div>
+        <h2 className="card__title">{t('home.recentTitle')}</h2>
+        <div className="empty-state">{t('home.recentEmpty')}</div>
       </div>
     );
   }
   return (
     <div className="card">
-      <h2 className="card__title">Recent captures</h2>
+      <h2 className="card__title">{t('home.recentTitle')}</h2>
       <table className="request-list">
         <thead>
           <tr>
-            <th>Target</th>
-            <th>Auth Type</th>
-            <th>Started</th>
+            <th>{t('home.headerTarget')}</th>
+            <th>{t('home.headerAuthType')}</th>
+            <th>{t('home.headerStarted')}</th>
             <th></th>
           </tr>
         </thead>
@@ -134,10 +124,10 @@ function RecentSessionList() {
               <td className="muted">{s.startedAt}</td>
               <td className="row row--end">
                 <button className="btn btn--secondary" onClick={() => store.loadSession(s.id)}>
-                  Open
+                  {t('common.open')}
                 </button>
                 <button className="btn btn--danger" onClick={() => store.deleteSession(s.id)}>
-                  Delete
+                  {t('common.delete')}
                 </button>
               </td>
             </tr>
