@@ -9,6 +9,9 @@ description = "Visualize and document authentication flows for authorized web ap
 tauri-build = { version = "1.5", features = [] }
 
 [dependencies]
+# NOTE: do NOT add `"devtools"` to features below — devtools are auto-enabled
+# in debug builds (`tauri dev`) and explicitly disabled in release. Captured
+# auth data must not be inspectable in shipped binaries.
 tauri = { version = "1.5", features = ["dialog-save"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
