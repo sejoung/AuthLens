@@ -100,7 +100,7 @@ export function ReportPage() {
       </header>
 
       <div className="card">
-        <div className="row row--between" style={{ marginBottom: 'var(--space-4)' }}>
+        <div className="report-toolbar">
           <div className="tabs">
             <button
               className={`tab ${tab === 'preview' ? 'tab--active' : ''}`}
@@ -121,7 +121,7 @@ export function ReportPage() {
               {t('report.tabJson')}
             </button>
           </div>
-          <div className="row" style={{ gap: 'var(--space-3)' }}>
+          <div className="report-toolbar__options">
             <label className="row text-sm" style={{ gap: 'var(--space-2)' }}>
               <input
                 type="checkbox"
@@ -143,6 +143,8 @@ export function ReportPage() {
               />
               {t('report.includeRaw')}
             </label>
+          </div>
+          <div className="report-toolbar__exports">
             <button className="btn btn--secondary" onClick={copy}>
               {copied ? t('common.copied') : t('common.copy')}
             </button>
@@ -150,7 +152,7 @@ export function ReportPage() {
               {t('common.download')} {currentFormat === 'md' ? '.md' : '.json'}
             </button>
             <button className="btn btn--secondary" onClick={downloadPostman}>
-              {t('analysis.downloadPostman')}
+              {t('report.exportPostman')}
             </button>
           </div>
         </div>

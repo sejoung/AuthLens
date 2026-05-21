@@ -169,6 +169,7 @@
     "tabPreview": "미리보기",
     "tabMarkdown": "Markdown",
     "tabJson": "JSON",
+    "exportPostman": "Postman",
     "compact": "축약 — 인증 관련 항목만",
     "includeRaw": "원문 값 포함",
     "rawWarning": "⚠ 민감 정보의 원문이 포함됩니다. 권한이 확인된 사람에게만 공유하세요.",

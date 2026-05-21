@@ -169,6 +169,7 @@
     "tabPreview": "Preview",
     "tabMarkdown": "Markdown",
     "tabJson": "JSON",
+    "exportPostman": "Postman",
     "compact": "Compact — auth highlights only",
     "includeRaw": "Include raw values",
     "rawWarning": "⚠ Raw sensitive values are included. Only share with authorized reviewers.",

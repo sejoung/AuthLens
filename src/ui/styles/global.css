@@ -427,6 +427,35 @@ samp {
 .text-sm { font-size: var(--font-sm); }
 .text-xs { font-size: var(--font-xs); }
 
+/* Report page toolbar — wraps cleanly at narrow widths.
+   Three groups: tabs / display options / export buttons. Each group wraps
+   internally and the whole row wraps when needed. */
+.report-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.report-toolbar .tabs {
+  margin-bottom: 0; /* override default tabs margin */
+  border-bottom: 0; /* card already has its own boundary */
+  flex: 0 0 auto;
+}
+.report-toolbar__options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.report-toolbar__exports {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto; /* push exports to right when row has space */
+}
+
 /* Tabs */
 .tabs { display: flex; gap: var(--space-2); border-bottom: 1px solid var(--color-border); margin-bottom: var(--space-4); }
 .tab {
