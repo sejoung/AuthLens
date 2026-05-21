@@ -5,6 +5,7 @@ import { generateMarkdownReport, stringifyJsonExport, stringifyPostmanCollection
 import { store, useAppState } from '../state/store.js';
 import { MarkdownPreview } from '../components/MarkdownPreview.js';
 import { useReportStrings } from '../i18n/useReportStrings.js';
+import { downloadFile } from '../util/download.js';
 
 type Tab = 'preview' | 'markdown' | 'json';
 
@@ -70,25 +71,15 @@ export function ReportPage() {
   const downloadPostman = () => {
     if (!flow) return;
     const json = stringifyPostmanCollection(flow, { includeRaw: effectiveIncludeRaw });
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'authlens-collection.postman_collection.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    void downloadFile(json, 'application/json', 'authlens-collection.postman_collection.json');
   };
 
   const download = () => {
-    const blob = new Blob([text], {
-      type: currentFormat === 'md' ? 'text/markdown' : 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `authlens-report.${currentFormat === 'md' ? 'md' : 'json'}`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void downloadFile(
+      text,
+      currentFormat === 'md' ? 'text/markdown' : 'application/json',
+      `authlens-report.${currentFormat === 'md' ? 'md' : 'json'}`,
+    );
   };
 
   return (

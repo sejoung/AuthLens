@@ -104,3 +104,21 @@ export async function stopCaptureBackend(): Promise<void> {
   const { invoke } = await import('@tauri-apps/api/tauri');
   await invoke('stop_capture');
 }
+
+export type SaveDialogOptions = {
+  defaultFilename: string;
+  filters?: Array<{ name: string; extensions: string[] }>;
+};
+
+/**
+ * Tauri-only: native save dialog + file write via the `save_text_file` command.
+ * Returns the saved path (or null when cancelled). Throws on I/O errors.
+ */
+export async function saveTextFileViaTauri(
+  content: string,
+  options: SaveDialogOptions,
+): Promise<string | null> {
+  const { invoke } = await import('@tauri-apps/api/tauri');
+  const result = await invoke<string | null>('save_text_file', { content, options });
+  return result;
+}

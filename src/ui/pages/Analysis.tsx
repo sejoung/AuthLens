@@ -29,6 +29,7 @@ import {
 } from '@/analyzer';
 import { stringifyPostmanCollection, toCurlCommand } from '@/reporter';
 import type { RequestRecord, ResponseRecord } from '@/core';
+import { downloadFile } from '../util/download.js';
 import { generateMermaidDiagram } from '@/reporter';
 import { store, useAppState } from '../state/store.js';
 import { MermaidDiagram } from '../components/MermaidDiagram.js';
@@ -639,13 +640,7 @@ function DiscoveredEndpointsCard({
   const downloadPostman = () => {
     if (!flow) return;
     const json = stringifyPostmanCollection(flow, { includeRaw: showRaw });
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'authlens-collection.postman_collection.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    void downloadFile(json, 'application/json', 'authlens-collection.postman_collection.json');
   };
 
   return (
