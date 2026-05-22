@@ -219,19 +219,22 @@ async function main() {
     },
   });
 
+  // Browser teardown — give Playwright plenty of time. Force-exiting while
+  // Chromium is still cleaning up its child processes / GPU helpers leaves
+  // orphaned processes and triggers OS "browser quit unexpectedly" dialogs.
   try {
-    await withTimeout(context.close(), 5000);
+    await withTimeout(context.close(), 10000);
   } catch (e) {
     process.stderr.write(`context.close failed: ${e.message ?? e}\n`);
   }
   try {
-    await withTimeout(browser.close(), 5000);
+    await withTimeout(browser.close(), 10000);
   } catch (e) {
     process.stderr.write(`browser.close failed: ${e.message ?? e}\n`);
   }
-  // Give the runtime a tick to actually exit; if not, force-exit. We've already
-  // flushed `finished` above via emitFlush, so this won't truncate output.
-  setTimeout(() => process.exit(0), 250).unref();
+  // Fallback force-exit only if the event loop hasn't drained after 5s
+  // (we already flushed `finished` via emitFlush, so stdout is safe).
+  setTimeout(() => process.exit(0), 5000).unref();
 }
 
 function withTimeout(promise, ms) {

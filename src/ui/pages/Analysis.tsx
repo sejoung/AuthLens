@@ -466,6 +466,14 @@ function Metric({
   );
 }
 
+function statusClass(status: number): 'success' | 'info' | 'warning' | 'danger' {
+  if (status >= 500) return 'danger';
+  if (status >= 400) return 'warning';
+  if (status >= 300) return 'info';
+  if (status >= 200) return 'success';
+  return 'info';
+}
+
 function methodClass(m: string): string {
   switch (m.toUpperCase()) {
     case 'GET':
@@ -664,16 +672,15 @@ function DiscoveredEndpointsCard({
           <tr>
             <th className="col-methods">{t('capture.headerMethod')}</th>
             <th>{t('analysis.endpointPattern')}</th>
-            <th className="col-resource">{t('analysis.endpointStatus')}</th>
+            <th className="col-status-list">{t('analysis.endpointStatus')}</th>
             <th className="col-actions">{t('analysis.endpointCopyCurl')}</th>
           </tr>
         </thead>
         <tbody>
           {endpoints.map((e) => {
-            const statusText = Object.entries(e.statusCounts)
-              .sort(([a], [b]) => Number(a) - Number(b))
-              .map(([s, c]) => (c > 1 ? `${s}×${c}` : s))
-              .join(' ');
+            const statusEntries = Object.entries(e.statusCounts).sort(
+              ([a], [b]) => Number(a) - Number(b),
+            );
             return (
               <tr key={`${e.host}|${e.pathPattern}`} className={e.authenticated ? 'is-login' : ''}>
                 <td className="col-methods">
@@ -690,14 +697,31 @@ function DiscoveredEndpointsCard({
                     {e.host}
                     {e.pathPattern}
                   </code>
-                  {e.authenticated && (
-                    <span className="badge badge--success" style={{ marginLeft: 6 }}>
-                      auth
+                  <div className="row text-xs" style={{ gap: 6, marginTop: 4 }}>
+                    <span className="muted">
+                      {t('analysis.endpointCalls', { count: e.requestCount })}
                     </span>
-                  )}
-                  <div className="muted text-xs">×{e.requestCount}</div>
+                    {e.authenticated && <span className="badge badge--success">auth</span>}
+                  </div>
                 </td>
-                <td className="col-resource muted text-xs">{statusText || '—'}</td>
+                <td className="col-status-list">
+                  <div className="badge-row">
+                    {statusEntries.length === 0 ? (
+                      <span className="muted text-xs">—</span>
+                    ) : (
+                      statusEntries.map(([status, count]) => (
+                        <span
+                          key={status}
+                          className={`badge badge--${statusClass(Number(status))}`}
+                          title={t('analysis.endpointStatusCount', { count })}
+                        >
+                          {status}
+                          {count > 1 && <span style={{ opacity: 0.7 }}> ×{count}</span>}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                </td>
                 <td className="col-actions">
                   <div className="row" style={{ gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
                     <button className="btn btn--secondary" onClick={() => copyCurl(e.example)}>

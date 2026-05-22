@@ -106,14 +106,37 @@ export function CapturePage() {
         </div>
       )}
 
-      {state.captureStatus === 'analyzing' && (
-        <div className="notice-banner" role="status" aria-live="polite">
-          <Spinner size={18} />
-          <div>
-            <div className="notice-banner__title">{t('capture.analyzingTitle')}</div>
-            <p className="notice-banner__body">
-              {t('capture.analyzingBody', { count: state.captureStats.requestCount })}
+      {(state.captureStatus === 'stopping' || state.captureStatus === 'analyzing') && (
+        <div
+          className="capture-overlay"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <div className="capture-overlay__card">
+            <Spinner size={36} ariaLabel={t('capture.overlayAria')} />
+            <h3 className="capture-overlay__title">
+              {state.captureStatus === 'stopping'
+                ? t('capture.stoppingTitle')
+                : t('capture.analyzingTitle')}
+            </h3>
+            <p className="capture-overlay__body">
+              {state.captureStatus === 'stopping'
+                ? t('capture.stoppingBody')
+                : t('capture.analyzingBody', { count: state.captureStats.requestCount })}
             </p>
+            <div className="capture-overlay__steps">
+              <span
+                className={`capture-overlay__step ${state.captureStatus === 'stopping' ? 'is-active' : 'is-done'}`}
+              >
+                1 · {t('capture.stepStop')}
+              </span>
+              <span
+                className={`capture-overlay__step ${state.captureStatus === 'analyzing' ? 'is-active' : ''}`}
+              >
+                2 · {t('capture.stepAnalyze')}
+              </span>
+            </div>
           </div>
         </div>
       )}

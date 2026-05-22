@@ -195,7 +195,9 @@ samp {
   font-size: var(--font-sm);
   font-weight: 600;
   border: 1px solid transparent;
-  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease,
+    transform 60ms ease, filter 120ms ease, opacity 120ms ease;
+  user-select: none;
 }
 .btn--primary {
   background: var(--color-primary);
@@ -220,10 +222,19 @@ samp {
 .btn--danger:hover {
   background: rgba(251, 113, 133, 0.08);
 }
+/* Tactile click feedback — press visibly even before async work resolves. */
+.btn:not([disabled]):active {
+  transform: translateY(1px);
+  filter: brightness(0.92);
+}
 .btn[disabled],
 .btn[aria-disabled='true'] {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: not-allowed;
+  /* Make the visual transition from active → disabled obvious by also
+     desaturating, so a click that immediately disables the button still
+     reads as "something changed". */
+  filter: saturate(0.6);
 }
 
 /* Inputs */
@@ -336,13 +347,16 @@ samp {
 .request-list th.col-methods,
 .request-list td.col-methods { width: 150px; }
 .request-list th.col-status,
-.request-list td.col-status { width: 70px; }
+.request-list td.col-status { width: 90px; }
 .request-list th.col-time,
-.request-list td.col-time { width: 96px; }
+.request-list td.col-time { width: 110px; }
 .request-list th.col-tags,
 .request-list td.col-tags { width: 110px; }
 .request-list th.col-resource,
 .request-list td.col-resource { width: 96px; }
+/* Multi-status badge column (e.g. discovered endpoint with 200×3, 401, 500). */
+.request-list th.col-status-list,
+.request-list td.col-status-list { width: 140px; }
 .request-list th.col-actions,
 .request-list td.col-actions { width: 200px; }
 
@@ -792,6 +806,67 @@ samp {
 .kv-table__lock {
   font-size: 9px;
   padding: 0 4px;
+}
+
+/* Full-screen overlay shown during async capture finalize + analyze.
+   Blocks accidental clicks on the underlying UI and gives clear progress feedback.
+   - No fade-in animation: needs to appear instantly on Stop click.
+   - No backdrop-filter: GPU blur on top of a busy DOM (live request table)
+     adds a noticeable paint delay on macOS WKWebView. A solid darker overlay
+     looks nearly the same and renders immediately. */
+.capture-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.88);
+  display: grid;
+  place-items: center;
+  z-index: 60;
+}
+.capture-overlay__card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8) var(--space-10);
+  max-width: 480px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  box-shadow: var(--shadow-soft);
+  color: var(--color-text-primary);
+}
+.capture-overlay__title {
+  font-size: var(--font-xl);
+  font-weight: 600;
+  margin: 0;
+}
+.capture-overlay__body {
+  color: var(--color-text-secondary);
+  font-size: var(--font-sm);
+  margin: 0;
+  line-height: 1.5;
+}
+.capture-overlay__steps {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  font-size: var(--font-xs);
+}
+.capture-overlay__step {
+  color: var(--color-text-muted);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+.capture-overlay__step.is-active {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.capture-overlay__step.is-done {
+  color: var(--color-success);
+  border-color: rgba(52, 211, 153, 0.4);
 }
 
 /* Spinner */

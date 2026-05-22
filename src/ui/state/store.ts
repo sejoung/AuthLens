@@ -67,6 +67,7 @@ class Store {
   private finishedSeen = false;
   private listenerReady?: Promise<void>;
   private stopTimer?: ReturnType<typeof setTimeout>;
+  private stopRequestedAt?: number;
 
   constructor() {
     void this.sessionStore.init();
@@ -131,22 +132,33 @@ class Store {
           clearTimeout(this.stopTimer);
           this.stopTimer = undefined;
         }
-        // Switch to 'analyzing' so the UI shows progress immediately. The
-        // build is async (yields to event loop in chunks) so the spinner can
-        // actually render and the button can react.
-        this.setState({ captureStatus: 'analyzing' });
-        buildFlowFromCaptureAsync(event.payload)
-          .then((flow) => {
-            this.setActiveFlow(flow);
-            return this.saveActiveFlow();
-          })
-          .catch((e) => {
-            console.error('[authlens] buildFlowFromCapture failed:', e);
-            this.setState({
-              captureStatus: 'idle',
-              captureError: `Failed to build flow from capture: ${(e as Error).message}`,
+        // Guarantee the 'stopping' overlay is visible for a minimum duration.
+        // Without this, fast captures complete the stop → finished cycle in
+        // <100ms and the user never sees the stopping state at all (React
+        // collapses through the intermediate render).
+        const MIN_STOPPING_MS = 350;
+        const elapsed = this.stopRequestedAt ? Date.now() - this.stopRequestedAt : MIN_STOPPING_MS;
+        const delay = Math.max(0, MIN_STOPPING_MS - elapsed);
+        const proceed = () => {
+          // Switch to 'analyzing' so the UI shows progress immediately. The
+          // build is async (yields to event loop in chunks) so the spinner can
+          // actually render and the button can react.
+          this.setState({ captureStatus: 'analyzing' });
+          buildFlowFromCaptureAsync(event.payload)
+            .then((flow) => {
+              this.setActiveFlow(flow);
+              return this.saveActiveFlow();
+            })
+            .catch((e) => {
+              console.error('[authlens] buildFlowFromCapture failed:', e);
+              this.setState({
+                captureStatus: 'idle',
+                captureError: `Failed to build flow from capture: ${(e as Error).message}`,
+              });
             });
-          });
+        };
+        if (delay > 0) setTimeout(proceed, delay);
+        else proceed();
         return;
       }
       case 'error':
@@ -247,6 +259,7 @@ class Store {
       this.setState({ captureStatus: 'idle' });
       return;
     }
+    this.stopRequestedAt = Date.now();
     this.setState({ captureStatus: 'stopping' });
     // Fallback: if `finished` never arrives within 30s, give up so the user
     // isn't stranded on the Capture screen.
