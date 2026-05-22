@@ -198,6 +198,9 @@ samp {
   transition: background 120ms ease, color 120ms ease, border-color 120ms ease,
     transform 60ms ease, filter 120ms ease, opacity 120ms ease;
   user-select: none;
+  /* WebKit's default button cursor is arrow — opt back into the hand pointer
+     so it's obvious the element is clickable. */
+  cursor: pointer;
 }
 .btn--primary {
   background: var(--color-primary);

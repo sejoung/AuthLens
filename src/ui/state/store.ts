@@ -68,6 +68,23 @@ class Store {
   private listenerReady?: Promise<void>;
   private stopTimer?: ReturnType<typeof setTimeout>;
   private stopRequestedAt?: number;
+  /**
+   * Live request/response events from the sidecar are batched per-frame
+   * before re-rendering the UI. Without this, a chatty target site (dozens
+   * of XHRs per second) keeps the main thread busy applying setState in a
+   * tight loop and click events on the Stop button get starved.
+   *
+   * Counters (`liveTotal` / `liveAuthTotal`) reflect *every* event ever
+   * received so the header chips stay accurate even when we cap or drop
+   * entries from the visible list.
+   */
+  private pendingRequests: AppState['liveRequests'] = [];
+  private pendingResponses = new Map<string, number>();
+  private flushScheduled = false;
+  private liveTotal = 0;
+  private liveAuthTotal = 0;
+  /** Cap so the live table doesn't grow unboundedly during long captures. */
+  private static readonly MAX_LIVE_REQUESTS = 1000;
 
   constructor() {
     void this.sessionStore.init();
@@ -98,32 +115,37 @@ class Store {
     switch (event.type) {
       case 'started':
         this.finishedSeen = false;
+        this.liveTotal = 0;
+        this.liveAuthTotal = 0;
+        this.pendingRequests = [];
+        this.pendingResponses.clear();
         this.setState({ captureError: undefined });
         return;
       case 'request': {
         const r = event.payload;
-        const entry = {
-          id: r.id,
-          method: r.method,
-          url: r.url,
-          timestamp: r.timestamp,
-          isLoginCandidate: looksLikeLoginUrl(r.url, r.method),
-        };
-        const list = [...this.state.liveRequests, entry];
-        this.setState({
-          liveRequests: list,
-          captureStats: {
-            requestCount: list.length,
-            authCandidateCount: list.filter((x) => x.isLoginCandidate).length,
-          },
-        });
+        const isLoginCandidate = looksLikeLoginUrl(r.url, r.method);
+        this.liveTotal += 1;
+        if (isLoginCandidate) this.liveAuthTotal += 1;
+        // Only queue UI updates while actively running. Once 'stopping'
+        // or 'analyzing' is in progress, late events from the sidecar
+        // teardown should bump counters but not redraw the table.
+        if (this.state.captureStatus === 'running') {
+          this.pendingRequests.push({
+            id: r.id,
+            method: r.method,
+            url: r.url,
+            timestamp: r.timestamp,
+            isLoginCandidate,
+          });
+        }
+        this.scheduleLiveFlush();
         return;
       }
       case 'response': {
-        const updated = this.state.liveRequests.map((r) =>
-          r.id === event.payload.requestId ? { ...r, status: event.payload.status } : r,
-        );
-        this.setState({ liveRequests: updated });
+        if (this.state.captureStatus === 'running') {
+          this.pendingResponses.set(event.payload.requestId, event.payload.status);
+          this.scheduleLiveFlush();
+        }
         return;
       }
       case 'finished': {
@@ -191,6 +213,52 @@ class Store {
     }
   }
 
+  /**
+   * Flush queued request/response events to React state, at most once per
+   * animation frame. Combines all pending appends + status updates into a
+   * single setState so React renders once per frame regardless of how many
+   * events the sidecar fires.
+   */
+  private scheduleLiveFlush() {
+    if (this.flushScheduled) return;
+    this.flushScheduled = true;
+    const flush = () => {
+      this.flushScheduled = false;
+      const hasAdditions = this.pendingRequests.length > 0;
+      const hasUpdates = this.pendingResponses.size > 0;
+      // Counters always update — even if status changed and no entries
+      // were queued, the totals advanced and the header should reflect that.
+      let list = this.state.liveRequests;
+      if (hasAdditions) {
+        list = list.concat(this.pendingRequests);
+        this.pendingRequests = [];
+      }
+      if (hasUpdates) {
+        list = list.map((r) => {
+          const s = this.pendingResponses.get(r.id);
+          return s !== undefined ? { ...r, status: s } : r;
+        });
+        this.pendingResponses.clear();
+      }
+      if (list.length > Store.MAX_LIVE_REQUESTS) {
+        list = list.slice(-Store.MAX_LIVE_REQUESTS);
+      }
+      this.setState({
+        liveRequests: list,
+        captureStats: {
+          requestCount: this.liveTotal,
+          authCandidateCount: this.liveAuthTotal,
+        },
+      });
+    };
+    if (typeof requestAnimationFrame !== 'undefined') {
+      requestAnimationFrame(flush);
+    } else {
+      // Node/test environment fallback.
+      setTimeout(flush, 16);
+    }
+  }
+
   getState = (): AppState => this.state;
 
   subscribe = (l: Listener) => {
@@ -221,6 +289,10 @@ class Store {
    */
   startCapture = async (url: string) => {
     this.finishedSeen = false;
+    this.liveTotal = 0;
+    this.liveAuthTotal = 0;
+    this.pendingRequests = [];
+    this.pendingResponses.clear();
     this.setState({
       route: 'capture',
       targetUrl: url,
