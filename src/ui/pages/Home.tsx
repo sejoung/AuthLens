@@ -119,28 +119,43 @@ function RecentSessionList() {
   return (
     <div className="card">
       <h2 className="card__title">{t('home.recentTitle')}</h2>
-      <table className="request-list">
+      <table className="request-list recent-list">
         <thead>
           <tr>
             <th>{t('home.headerTarget')}</th>
-            <th className="col-tags">{t('home.headerAuthType')}</th>
-            <th className="col-time">{t('home.headerStarted')}</th>
+            <th className="col-auth-type">{t('home.headerAuthType')}</th>
+            <th className="col-started-at">{t('home.headerStarted')}</th>
             <th className="col-actions"></th>
           </tr>
         </thead>
         <tbody>
           {state.recentSessions.map((s) => (
             <tr key={s.id}>
-              <td title={s.targetUrl}>{s.targetUrl}</td>
-              <td className="col-tags">
+              <td>
+                {/* The URL itself is the open action — a larger, more
+                    natural click target than a separate "Open" button.
+                    Rendered as a button (not <a>) so we don't navigate
+                    the webview anywhere; this only loads the saved
+                    session into state. */}
+                <button
+                  type="button"
+                  className="link-button"
+                  title={t('home.openSessionHint', { url: s.targetUrl })}
+                  onClick={() => store.loadSession(s.id)}
+                >
+                  {s.targetUrl}
+                </button>
+              </td>
+              <td className="col-auth-type">
                 <span className="badge">{s.authType ?? 'unknown'}</span>
               </td>
-              <td className="col-time muted">{s.startedAt}</td>
+              <td className="col-started-at muted">{formatStartedAt(s.startedAt)}</td>
               <td className="col-actions row row--end">
-                <button className="btn btn--secondary" onClick={() => store.loadSession(s.id)}>
-                  {t('common.open')}
-                </button>
-                <button className="btn btn--danger" onClick={() => store.deleteSession(s.id)}>
+                <button
+                  className="btn btn--danger"
+                  onClick={() => store.deleteSession(s.id)}
+                  aria-label={t('home.deleteSessionAria', { url: s.targetUrl })}
+                >
                   {t('common.delete')}
                 </button>
               </td>
@@ -150,4 +165,27 @@ function RecentSessionList() {
       </table>
     </div>
   );
+}
+
+/**
+ * Recent-list date format. Locale-aware date+time joined by a space, like
+ * "2026-05-22 16:55" or "5/22/2026, 4:55 PM" depending on locale. Kept short
+ * so a 170px column doesn't overflow into the actions cell beside it.
+ */
+function formatStartedAt(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const date = d.toLocaleDateString(undefined, {
+      year: '2-digit',
+      month: 'numeric',
+      day: 'numeric',
+    });
+    const time = d.toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    return `${date} ${time}`;
+  } catch {
+    return iso;
+  }
 }

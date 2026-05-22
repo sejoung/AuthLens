@@ -363,6 +363,63 @@ samp {
 .request-list th.col-actions,
 .request-list td.col-actions { width: 200px; }
 
+/* Home → "Recent sessions" table — different content shape than the request
+   list on Analysis (full target URL instead of method/path; full date
+   instead of relative time). Override column widths so badges and dates
+   render on a single line. */
+.request-list.recent-list th.col-auth-type,
+.request-list.recent-list td.col-auth-type { width: 150px; }
+.request-list.recent-list th.col-started-at,
+.request-list.recent-list td.col-started-at {
+  width: 170px;
+  white-space: nowrap;
+  /* Clip rather than let the date bleed into the actions column behind the
+     buttons (visible through the gap between Open and Delete). */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.request-list.recent-list td.col-auth-type .badge {
+  /* "cookie-session" is the longest authType label; keep it on one line. */
+  white-space: nowrap;
+}
+.request-list.recent-list th.col-actions,
+.request-list.recent-list td.col-actions { width: 110px; }
+
+/* Text-as-button: a clickable label that *looks* like a link. Used for the
+   target URL in Recent Sessions so the URL itself is the open affordance,
+   without rendering an <a> that the webview could try to navigate to. */
+.link-button {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+  /* Allow long URLs to wrap inside the table cell. */
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+.link-button:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.link-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* The very last row's bottom border lines up with the surrounding card's
+   inner edge — visually that line looks half-cut. Drop it on the last row
+   of every request-list to let the card border do the job alone. */
+.request-list tbody tr:last-child td {
+  border-bottom: none;
+}
+
 /* Multi-badge container: flex-wraps with consistent gap when there are 3+
    methods. Works both inline in a cell and standalone. */
 .badge-row {

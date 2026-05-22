@@ -42,6 +42,8 @@
     "headerTarget": "대상",
     "headerAuthType": "인증 방식",
     "headerStarted": "시작 시각",
+    "openSessionHint": "{{url}} 분석 열기",
+    "deleteSessionAria": "{{url}} 세션 삭제",
     "errorMissing": "URL을 입력해 주세요.",
     "errorScheme": "http 또는 https URL만 지원합니다.",
     "errorInvalid": "올바른 URL 형식이 아닙니다."

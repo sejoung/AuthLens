@@ -26,12 +26,17 @@ what the auth layer is actually doing.
 | | |
 |---|---|
 | **Auth flow detection** | Login request scoring, CSRF/OAuth/OIDC/SSO indicators, JWT detection, Basic-auth detection |
-| **Snapshots & diffs** | Cookie diff (added/changed/removed + HttpOnly/Secure/SameSite), localStorage / sessionStorage diff |
+| **Snapshots & diffs** | Cookie diff (added/changed/removed + HttpOnly/Secure/SameSite), localStorage / sessionStorage diff — shown inline on the Analysis tab |
+| **Security grade** | A/B/C/D/F roll-up of every signal with "to reach next grade, fix X" suggestions |
+| **OAuth/OIDC deep checks** | PKCE, `state`, `nonce`, implicit-flow detection, http-only redirect_uri, plain `code_challenge_method`, long-lived access tokens |
+| **Best-practice baseline** | Auth cookies (HttpOnly/Secure/SameSite), JWT alg/exp/lifetime, token-in-localStorage warning — with observed-vs-recommended diff |
+| **Compare** | Two saved captures side-by-side: authType change, confidence delta, endpoint set diff, cookie flag regressions, security note diff |
 | **Visualization** | Auto-generated Mermaid sequence diagram, rendered inline |
 | **JWT inspection** | Decoded header / payload / expiry status for every JWT found in cookies, headers, storage, or response bodies |
 | **Discovered endpoints** | Path-pattern grouping (e.g. `/users/:id`), per-method × per-status counts, copy as curl |
 | **Report exports** | Markdown (with diagram), JSON, Postman v2.1 collection, curl & fetch snippets |
-| **Replay sandbox** | Re-issue captured requests in dry-run or live mode with strict per-session quotas (off by default) |
+| **Replay sandbox** | Single-request or full sequence replay with 401-triggered token refresh; strict per-session quotas (off by default) |
+| **Persistent history** | Every capture saved to a bundled SQLite database (raw stripped on save) — survives app restarts so regression comparison actually works |
 | **Compact mode** | Filter timeline & request list to auth-relevant events only |
 | **i18n** | English & Korean UI (auto-detected, switchable in Settings) |
 
@@ -101,10 +106,18 @@ npm run build    # tsc --noEmit + vite build
    - Cookie & storage diff
    - JWT decoding (header / payload / expiry)
    - Discovered-endpoint grouping with status-code histogram
+   - OAuth/OIDC validation + best-practice baseline checks
+   - Security grade roll-up
    - Mermaid sequence diagram generation
-6. **Analysis** tab shows the diagram + summary cards + collapsible details.
+6. **Analysis** tab shows the grade + diagram + cookie/storage diff + every detail card. This is the full picture — Report is just for sharing.
 7. **Report** tab renders Markdown documentation and exports
    (`.md` / `.json` / Postman collection).
+8. **Compare** tab lets you pick any two saved captures and see what
+   changed — useful as a release / deploy regression check.
+
+Sessions are persisted automatically to a bundled SQLite database (in the
+OS app data directory) so step 8 survives restarts. Raw values are stripped
+on save; nothing sensitive ever hits disk.
 
 ---
 
@@ -125,8 +138,9 @@ the full policy.
 
 - **Raw tokens / passwords / cookies are never persisted to disk.** They live
   in session memory while the app is open and are stripped (`stripRaw`)
-  before any save to SQLite or the in-memory store. The Recent Sessions list
-  never holds raw secrets.
+  before any save to the bundled SQLite database. The Recent Sessions list
+  never holds raw secrets — even if a future caller forgets to strip,
+  `TauriSessionStore` re-applies the strip on its save path (defense in depth).
 - The UI shows **masked values by default**. The Settings toggle "Reveal raw
   values by default" only controls the Report preview's rendering — it does
   *not* change persistence.
@@ -137,11 +151,13 @@ the full policy.
 
 ### Replay sandbox limits
 
-- 1.5 s cooldown between sends
-- 10 sends per capture session (hard cap)
+- 1.5 s cooldown between sends (Rust-side enforced)
+- 10 sends per capture session (hard cap, Rust-side enforced)
 - Max 5 redirects, max 256 KB response body
 - HTTP/HTTPS only (no file://, no custom schemes)
 - Per-host authorization checkbox required for live mode
+- Sequence replay: per-host authorization covers every host in the queue;
+  on 401 the user-marked refresh step is optionally re-run + one retry
 
 ### Capture limits
 
@@ -159,18 +175,31 @@ the full policy.
 src/
   core/             types, masking policy, JWT decoder, constants
   recorder/         Playwright adapter + in-memory recorder
-  analyzer/         pipeline entry + 3 cohesive groups (see below)
+  analyzer/         pipeline entry + cohesive groups (see below)
   reporter/         markdown / mermaid / JSON / curl / fetch / Postman generators
-  storage/          SessionStore (in-memory + SQLite) — strips raw on save
-  ui/               React UI: Home / Capture / Analysis / Report / Settings
+  storage/          SessionStore interface + TauriSessionStore (calls Rust)
+  ui/               React UI: Home / Capture / Analysis / Compare / Report / Settings
 sidecar/            Node Playwright sidecar (NDJSON streaming over stdout)
-src-tauri/          Rust shell: spawns sidecar, forwards events, replay sandbox
+src-tauri/          Rust shell: sidecar, replay sandbox, SQLite session store
 tests/              Vitest suites — mirrors src/ layout
 ```
 
 Every top-level module exposes a barrel `index.ts`; callers import from
 `@/analyzer`, `@/core`, etc. and never reach into individual files. The UI
 entry point is `src/ui/main.tsx` (Vite convention).
+
+### Storage path
+
+```
+React UI ──invoke()──► Rust (sessions.rs) ──rusqlite──► sessions.sqlite
+                                                        (OS app data dir)
+```
+
+Session metadata (id, target URL, timestamps, authType, confidence) lives
+in indexed columns; the full `AuthFlow` is a JSON column so the Rust side
+doesn't have to model the analyzer's evolving types. In browser preview
+(`npm run dev`) without a Rust backend, persistence is a no-op — only the
+on-demand demo flow is available, intentionally.
 
 ### Inside `src/analyzer/`
 
@@ -190,6 +219,7 @@ analyzer/
     detect.ts             # cookie-session / JWT / OAuth / OIDC / SSO / Basic
     headers.ts            # Authorization header parsing
     oauth.ts              # OAuth/OIDC flow recognition
+    oauth-validation.ts   # PKCE / state / nonce / implicit-flow checks
     jwt-locations.ts      # find JWTs across cookies / headers / storage / bodies
 
   artifacts/              # captured artifacts & secondary outputs
@@ -198,6 +228,15 @@ analyzer/
     redirects.ts
     noteworthy.ts         # filter noisy events
     raw-presence.ts
+
+  baseline/               # best-practice baseline checks
+    checks.ts             # cookie flags, JWT alg/exp, storage tokens
+
+  comparison/             # capture-vs-capture diff
+    compare.ts            # authType, endpoints, cookie flags, security notes
+
+  grading/                # roll-up scoring
+    grade.ts              # A/B/C/D/F + "to next grade, fix X" suggestions
 ```
 
 ### Performance notes
@@ -233,13 +272,13 @@ expected on the user's machine.
 
 ## Tech stack
 
-- **Tauri** (Rust shell, native window, sidecar IPC, replay sandbox)
+- **Tauri** (Rust shell, native window, sidecar IPC, replay sandbox, SQLite store)
 - **React 18** + **TypeScript** + **Vite** (UI)
 - **Playwright** (headful Chromium capture, via Node sidecar)
-- **SQLite** (`better-sqlite3`) — local capture history (raw values stripped
-  before save)
+- **rusqlite** (bundled SQLite on the Rust side) — local capture history;
+  raw values stripped before save, accessed from the UI via Tauri commands
 - **react-i18next** (English / Korean, parity-checked)
-- **marked** + **mermaid** (Report preview)
+- **marked** + **mermaid** (Report preview, sequence diagrams)
 
 ---
 

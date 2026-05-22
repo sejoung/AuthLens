@@ -42,6 +42,8 @@
     "headerTarget": "Target",
     "headerAuthType": "Auth Type",
     "headerStarted": "Started",
+    "openSessionHint": "Open analysis for {{url}}",
+    "deleteSessionAria": "Delete saved session for {{url}}",
     "errorMissing": "Please enter a URL.",
     "errorScheme": "Only http and https URLs are supported.",
     "errorInvalid": "That does not look like a valid URL."
