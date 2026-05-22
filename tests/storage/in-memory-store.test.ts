@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InMemorySessionStore } from '@/storage/in-memory-store';
+import { InMemorySessionStore } from './in-memory-store.js';
 import type { StoredSession } from '@/storage/types';
 
 function sample(id: string, started: string): StoredSession {

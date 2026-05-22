@@ -1,7 +1,8 @@
-import type { SessionStore, SessionSummary, StoredSession } from './types.js';
+import type { SessionStore, SessionSummary, StoredSession } from '@/storage';
 
 /**
- * 테스트 및 dev에서 사용하는 메모리 저장소. SQLite 어댑터와 동일 인터페이스.
+ * 테스트 전용 메모리 저장소. 프로덕션 경로는 Rust SQLite 백엔드(@TauriSessionStore).
+ * 같은 SessionStore 인터페이스를 구현해서 분석/UI 로직을 Tauri 없이 테스트.
  */
 export class InMemorySessionStore implements SessionStore {
   private readonly sessions = new Map<string, StoredSession>();

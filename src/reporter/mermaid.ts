@@ -17,7 +17,11 @@ export function generateMermaidDiagram(flow: AuthFlow): string {
     lines.push('  participant API');
   }
 
-  for (const event of flow.events) {
+  // Defensive: older saved sessions or malformed inputs may lack `events`.
+  // Returning an empty string would crash mermaid 11's parser with "Syntax
+  // error in text"; the header-only diagram still renders cleanly.
+  const events = flow.events ?? [];
+  for (const event of events) {
     const line = renderEvent(event, flow);
     if (line) lines.push('  ' + line);
   }

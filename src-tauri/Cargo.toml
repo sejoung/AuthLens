@@ -20,6 +20,14 @@ tokio = { version = "1", features = ["process", "io-util", "macros", "rt-multi-t
 # Rate limit / authorization enforced both UI-side and here (`replay::limit`).
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip", "brotli"] }
 url = "2"
+# Bundled SQLite for cross-platform predictability — ships in the binary so
+# users don't need a system libsqlite3. Stores captured AuthFlow sessions
+# across app restarts; required for the Compare feature to be meaningful.
+rusqlite = { version = "0.31", features = ["bundled"] }
+# Per-thread connection guard (keeps the SqliteSession handler `Send`).
+parking_lot = "0.12"
+# App data dir resolution (where the sqlite file lives).
+dirs = "5"
 
 [features]
 default = ["custom-protocol"]

@@ -21,6 +21,13 @@ export type AuthSignal = {
 export type SecurityNote = {
   level: 'info' | 'warning' | 'danger';
   message: string;
+  /**
+   * Stable identifier for the rule that produced this note (e.g.
+   * `oauth.missing-state`, `cookie.missing-httponly`). Used by the
+   * grading and comparison features — message strings are localized
+   * over time but codes stay stable across versions.
+   */
+  code?: string;
 };
 
 export type LoginCandidate = {

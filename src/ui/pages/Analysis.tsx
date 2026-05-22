@@ -22,6 +22,11 @@ import {
   type LoginCredentials,
   type LoginFormAnalysis,
   type LogoutEndpoint,
+  gradeSecurity,
+  runBaselineChecks,
+  type BaselineCheck,
+  type GradeFinding,
+  type SecurityGrade,
   type OAuthAuthorizeRequest,
   type OAuthCallback,
   type OAuthTokenExchange,
@@ -38,6 +43,7 @@ import type {
 } from '@/core';
 import { downloadFile } from '../util/download.js';
 import { ReplayModal } from '../components/ReplayModal.js';
+import { SequenceReplayModal } from '../components/SequenceReplayModal.js';
 import { generateMermaidDiagram } from '@/reporter';
 import { store, useAppState } from '../state/store.js';
 import { MermaidDiagram } from '../components/MermaidDiagram.js';
@@ -49,6 +55,7 @@ export function AnalysisPage() {
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [requestFilter, setRequestFilter] = useState<ResourceGroup>('api');
   const [includeRaw, setIncludeRaw] = useState(state.settings.revealRawByDefault);
+  const [sequenceOpen, setSequenceOpen] = useState(false);
 
   // Sync from global setting on external changes (same pattern as Report page).
   useEffect(() => {
@@ -85,6 +92,11 @@ export function AnalysisPage() {
     [flow, requestFilter],
   );
   const jwts = useMemo(() => (flow ? findJwts(flow) : []), [flow]);
+  const baselineChecks = useMemo(() => (flow ? runBaselineChecks(flow) : []), [flow]);
+  const grade = useMemo(
+    () => (flow ? gradeSecurity(flow.summary?.warnings ?? [], baselineChecks) : undefined),
+    [flow, baselineChecks],
+  );
   const endpoints = useMemo(() => (flow ? discoverEndpoints(flow) : []), [flow]);
   const loginForm = useMemo(() => (flow ? findLoginForm(flow) : undefined), [flow]);
   const logouts = useMemo(() => (flow ? findLogoutEndpoints(flow) : []), [flow]);
@@ -190,6 +202,8 @@ export function AnalysisPage() {
         </div>
       </div>
 
+      {grade && <SecurityGradeCard grade={grade} />}
+
       {/* Compact metric strip */}
       <div className="metric-strip">
         <Metric
@@ -237,7 +251,25 @@ export function AnalysisPage() {
             showRaw={showRaw}
             replayEnabled={state.settings.experimentalReplay}
           />
+          {state.settings.experimentalReplay && endpoints.length > 1 && (
+            <div className="row row--end" style={{ marginTop: 'var(--space-3)' }}>
+              <button
+                className="btn btn--secondary"
+                onClick={() => setSequenceOpen(true)}
+                title={t('analysis.runSequenceHint')}
+              >
+                {t('analysis.runSequence', { count: endpoints.length })}
+              </button>
+            </div>
+          )}
         </details>
+      )}
+      {sequenceOpen && (
+        <SequenceReplayModal
+          requests={endpoints.map((e) => e.example)}
+          showRaw={showRaw}
+          onClose={() => setSequenceOpen(false)}
+        />
       )}
 
       {loginForm && (
@@ -320,6 +352,22 @@ export function AnalysisPage() {
             ))}
           </ul>
         </div>
+      )}
+
+      {baselineChecks.length > 0 && (
+        <details className="disclosure" open>
+          <summary>
+            <span className="disclosure__title">{t('analysis.bestPractices')}</span>
+            <span className="muted text-xs">
+              {t('analysis.bestPracticesSummary', {
+                danger: baselineChecks.filter((c) => c.level === 'danger').length,
+                warning: baselineChecks.filter((c) => c.level === 'warning').length,
+                info: baselineChecks.filter((c) => c.level === 'info').length,
+              })}
+            </span>
+          </summary>
+          <BaselineChecksCard checks={baselineChecks} />
+        </details>
       )}
 
       {hasOAuthSection && (
@@ -491,6 +539,95 @@ function Metric({
       <div className="text-xs muted">{label}</div>
       <div className="metric-strip__value">{value}</div>
       {detail && <div className="text-xs muted">{detail}</div>}
+    </div>
+  );
+}
+
+function SecurityGradeCard({ grade }: { grade: SecurityGrade }) {
+  const { t } = useTranslation();
+  return (
+    <div className={`grade-card grade-card--${grade.letter.toLowerCase()}`}>
+      <div className="grade-card__letter" aria-label={t('analysis.gradeLabel', { letter: grade.letter })}>
+        {grade.letter}
+      </div>
+      <div className="grade-card__body">
+        <div className="grade-card__score">
+          <span>{t('analysis.gradeScore', { score: grade.score })}</span>
+          <span className="muted text-xs">
+            {t('analysis.gradeTotals', {
+              danger: grade.totals.danger,
+              warning: grade.totals.warning,
+              info: grade.totals.info,
+            })}
+          </span>
+        </div>
+        {grade.toNextGrade && grade.toNextGrade.suggestions.length > 0 ? (
+          <div className="grade-card__next">
+            <div className="text-xs muted">
+              {t('analysis.gradeToNext', {
+                target: grade.toNextGrade.target,
+                points: grade.toNextGrade.pointsNeeded,
+              })}
+            </div>
+            <ul className="grade-card__fixes">
+              {grade.toNextGrade.suggestions.slice(0, 3).map((s) => (
+                <li key={s.code}>
+                  <FindingChip f={s} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <div className="text-xs muted">
+            {grade.letter === 'A' ? t('analysis.gradeAEncouragement') : t('analysis.gradeNothingActionable')}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FindingChip({ f }: { f: GradeFinding }) {
+  return (
+    <>
+      <span className={`badge badge--${f.level}`}>{f.level}</span>{' '}
+      <code className="text-xs muted">{f.code}</code> — {f.message}
+    </>
+  );
+}
+
+function BaselineChecksCard({ checks }: { checks: BaselineCheck[] }) {
+  const { t } = useTranslation();
+  // Sort by severity so the worst is at the top — users scanning quickly
+  // should see danger findings first.
+  const severityOrder = { danger: 0, warning: 1, info: 2 } as const;
+  const sorted = [...checks].sort((a, b) => severityOrder[a.level] - severityOrder[b.level]);
+  return (
+    <div className="stack" style={{ gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
+      {sorted.map((c, i) => (
+        <div key={`${c.code}-${i}`} className="baseline-check">
+          <div className="baseline-check__header">
+            <span className={`badge badge--${c.level}`}>{c.level}</span>
+            <span className="badge badge--info">{c.category}</span>
+            <code className="muted text-xs">{c.code}</code>
+          </div>
+          <div className="baseline-check__message">{c.message}</div>
+          {(c.observed || c.recommended) && (
+            <div className="baseline-check__compare text-xs">
+              {c.observed && (
+                <span>
+                  <span className="muted">{t('analysis.baselineObserved')}:</span> <code>{c.observed}</code>
+                </span>
+              )}
+              {c.recommended && (
+                <span>
+                  <span className="muted">{t('analysis.baselineRecommended')}:</span> <code>{c.recommended}</code>
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

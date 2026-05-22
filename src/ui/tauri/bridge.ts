@@ -155,3 +155,52 @@ export async function replayQuota(): Promise<ReplayQuota> {
   const { invoke } = await import('@tauri-apps/api/tauri');
   return invoke<ReplayQuota>('replay_quota');
 }
+
+/**
+ * Session persistence — backed by SQLite on the Rust side. `flowJson` is the
+ * serialized AuthFlow (raw values already stripped on the frontend before
+ * passing into here).
+ */
+export type StoredSessionDto = {
+  id: string;
+  targetUrl: string;
+  startedAt: string;
+  endedAt?: string;
+  authType?: string;
+  confidence?: number;
+  flowJson: string;
+};
+
+export type SessionSummaryDto = {
+  id: string;
+  targetUrl: string;
+  startedAt: string;
+  endedAt?: string;
+  authType?: string;
+  confidence?: number;
+};
+
+export async function sessionSave(session: StoredSessionDto): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/tauri');
+  await invoke('session_save', { session });
+}
+
+export async function sessionList(limit?: number): Promise<SessionSummaryDto[]> {
+  const { invoke } = await import('@tauri-apps/api/tauri');
+  return invoke<SessionSummaryDto[]>('session_list', { limit });
+}
+
+export async function sessionGet(id: string): Promise<StoredSessionDto | null> {
+  const { invoke } = await import('@tauri-apps/api/tauri');
+  return invoke<StoredSessionDto | null>('session_get', { id });
+}
+
+export async function sessionDelete(id: string): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/tauri');
+  await invoke('session_delete', { id });
+}
+
+export async function sessionDeleteAll(): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/tauri');
+  await invoke('session_delete_all');
+}

@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { AuthFlow } from '@/core';
-import { InMemorySessionStore } from '@/storage';
-import type { SessionSummary, StoredSession } from '@/storage';
+import { TauriSessionStore } from '@/storage';
+import type { SessionStore, SessionSummary, StoredSession } from '@/storage';
 import {
   isTauri,
   listenCapture,
@@ -11,7 +11,7 @@ import {
 } from '../tauri/bridge.js';
 import { buildFlowFromCaptureAsync } from '../tauri/sidecar-adapter.js';
 
-export type Route = 'home' | 'capture' | 'analysis' | 'report' | 'settings';
+export type Route = 'home' | 'capture' | 'analysis' | 'report' | 'compare' | 'settings';
 
 export type CaptureStatus = 'idle' | 'running' | 'stopping' | 'analyzing';
 
@@ -63,7 +63,14 @@ class Store {
     },
   };
   private listeners = new Set<Listener>();
-  private sessionStore = new InMemorySessionStore();
+  // Tauri builds persist captures to a bundled SQLite database via the Rust
+  // backend so sessions survive restarts (required for Compare/regression).
+  // Browser preview has no backend — saves/lists silently no-op since the
+  // only "capture" in browser mode is the demo flow, which is recreated on
+  // demand from `src/ui/demo/sampleFlow.ts`.
+  private sessionStore: SessionStore = isTauri()
+    ? new TauriSessionStore()
+    : new NoopSessionStore();
   private finishedSeen = false;
   private listenerReady?: Promise<void>;
   private stopTimer?: ReturnType<typeof setTimeout>;
@@ -420,6 +427,12 @@ class Store {
       this.setState({ activeFlow: s.flow, route: 'analysis' });
     }
   };
+
+  /** Load a saved session without making it the active flow — used by Compare. */
+  getSessionFlow = async (id: string): Promise<AuthFlow | undefined> => {
+    const s = await this.sessionStore.getSession(id);
+    return s?.flow;
+  };
 }
 
 export const store = new Store();
@@ -461,4 +474,23 @@ function looksLikeLoginUrl(url: string, method: string): boolean {
     lower.includes('/session') ||
     lower.includes('/token')
   );
+}
+
+/**
+ * Browser-preview SessionStore: silently drops writes and returns empty lists.
+ * Persistence outside Tauri is intentionally out of scope — Recent Sessions
+ * just stays empty in `npm run dev`. Demo flow can still be loaded on demand.
+ */
+class NoopSessionStore implements SessionStore {
+  async init(): Promise<void> {}
+  async saveSession(): Promise<void> {}
+  async listSessions(): Promise<SessionSummary[]> {
+    return [];
+  }
+  async getSession(): Promise<StoredSession | undefined> {
+    return undefined;
+  }
+  async deleteSession(): Promise<void> {}
+  async deleteAll(): Promise<void> {}
+  async close(): Promise<void> {}
 }

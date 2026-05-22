@@ -5,6 +5,7 @@ import { FirstLaunchModal } from './components/FirstLaunchModal.js';
 import { HomePage } from './pages/Home.js';
 import { CapturePage } from './pages/Capture.js';
 import { AnalysisPage } from './pages/Analysis.js';
+import { ComparePage } from './pages/Compare.js';
 import { ReportPage } from './pages/Report.js';
 import { SettingsPage } from './pages/Settings.js';
 import { store, useAppState } from './state/store.js';
@@ -24,6 +25,7 @@ export function App() {
         {state.route === 'home' && <HomePage />}
         {state.route === 'capture' && <CapturePage />}
         {state.route === 'analysis' && <AnalysisPage />}
+        {state.route === 'compare' && <ComparePage />}
         {state.route === 'report' && <ReportPage />}
         {state.route === 'settings' && <SettingsPage />}
       </main>

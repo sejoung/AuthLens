@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type MermaidLib from 'mermaid';
 
 type MermaidApi = typeof MermaidLib;
@@ -44,21 +44,41 @@ function loadMermaid(): Promise<MermaidApi> {
   return mermaidPromise;
 }
 
+/**
+ * Counter for unique ids per render call. `useId()` returns the same value for
+ * the lifetime of the component instance, which causes mermaid 11 to throw
+ * when the same id is rendered twice (e.g. React StrictMode double-effects,
+ * or `code` prop changing between renders). A fresh id per render call
+ * sidesteps the issue.
+ */
+let renderCounter = 0;
+
 export function MermaidDiagram({ code }: { code: string }) {
-  const baseId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
-  const id = `mermaid-${baseId}`;
   const [svg, setSvg] = useState<string>('');
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
 
+  const trimmed = code.trim();
+
   useEffect(() => {
+    // Empty source crashes mermaid 11 with "No diagram type detected" which
+    // surfaces as "Syntax error in text" in the rendered fallback. Skip the
+    // render call entirely and show a friendly placeholder instead.
+    if (!trimmed) {
+      setSvg('');
+      setError(undefined);
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
+    const id = `mermaid-${++renderCounter}`;
     (async () => {
       try {
         const mermaid = await loadMermaid();
         if (cancelled) return;
-        const { svg: rendered } = await mermaid.render(id, code);
+        const { svg: rendered } = await mermaid.render(id, trimmed);
         if (!cancelled) {
           setSvg(rendered);
           setError(undefined);
@@ -75,7 +95,11 @@ export function MermaidDiagram({ code }: { code: string }) {
     return () => {
       cancelled = true;
     };
-  }, [code, id]);
+  }, [trimmed]);
+
+  if (!trimmed) {
+    return <div className="mermaid-rendered muted text-sm">(no diagram)</div>;
+  }
 
   if (error) {
     return (

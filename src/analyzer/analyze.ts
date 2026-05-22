@@ -9,6 +9,8 @@ import type {
 import { rankLoginCandidates } from './login/scoring.js';
 import { diffCookies, diffStorage } from './artifacts/diff.js';
 import { inferAuthType, toFlowSummary } from './auth-type/detect.js';
+import { findOAuthFlow } from './auth-type/oauth.js';
+import { validateOAuthFlow } from './auth-type/oauth-validation.js';
 import { buildAuthEvents, buildAuthSteps } from './events.js';
 import { extractRedirects } from './artifacts/redirects.js';
 
@@ -53,7 +55,11 @@ export function analyze(input: AnalyzeInput): AuthFlow {
     loginRequestId: candidates[0]?.requestId,
   });
 
-  return {
+  const summary = toFlowSummary(inference, candidates[0]?.requestId);
+  // Merge OAuth-specific findings into the summary's warnings. They share
+  // the SecurityNote shape; validate is a no-op when no authorize/token
+  // requests were captured.
+  const flowSkeleton: AuthFlow = {
     id: input.id ?? generateId('flow'),
     targetUrl: input.targetUrl,
     startedAt: input.startedAt ?? nowIso(),
@@ -68,6 +74,12 @@ export function analyze(input: AnalyzeInput): AuthFlow {
     storageBefore: input.storageBefore,
     storageAfter: input.storageAfter,
     loginCandidates: candidates,
-    summary: toFlowSummary(inference, candidates[0]?.requestId),
+    summary,
   };
+  const oauthInfo = findOAuthFlow(flowSkeleton);
+  const oauthFindings = validateOAuthFlow(oauthInfo);
+  if (oauthFindings.length > 0 && summary) {
+    summary.warnings = [...summary.warnings, ...oauthFindings];
+  }
+  return flowSkeleton;
 }
