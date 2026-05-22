@@ -1,26 +1,23 @@
 # AuthLens
 
-AuthLens is a developer tool for inspecting, visualizing, and documenting
-authentication flows in **authorized** web applications. You sign in normally,
-AuthLens observes — and produces a readable report (Markdown / JSON / Mermaid
-diagram) of what actually happened.
+> A developer tool for inspecting, visualizing, and documenting authentication
+> flows in **authorized** web applications. You sign in normally — AuthLens
+> observes — and produces a readable report (Markdown / JSON / Mermaid /
+> Postman) of what actually happened.
+
+AuthLens is **not** a penetration testing tool. It focuses on observation and
+documentation; anything that would require attacking or impersonating a system
+is explicitly out of scope.
 
 ---
 
-## Overview
+## Why
 
-Modern web applications often use complex authentication flows involving:
-
-- Session Cookies
-- CSRF Tokens
-- JWT Access Tokens
-- OAuth Redirects
-- SSO Providers
-- Multi-step Login Flows
-
-Understanding these flows in legacy or undocumented systems can be
-time-consuming. AuthLens helps developers and QA engineers observe, analyze,
-and document authentication behavior through an interactive visual workflow.
+Modern web apps stitch together session cookies, CSRF tokens, JWTs, OAuth
+redirects, SSO providers, and multi-step login flows. Understanding these in
+legacy or undocumented systems is slow. AuthLens lets developers and QA
+engineers capture a real session and get a structured, readable picture of
+what the auth layer is actually doing.
 
 ---
 
@@ -28,17 +25,17 @@ and document authentication behavior through an interactive visual workflow.
 
 | | |
 |---|---|
-| **Auth flow detection** | Login request scoring, CSRF/OAuth/OIDC/SSO indicators, JWT detection |
-| **Snapshots & diffs** | Cookie diff (added/changed/removed, HttpOnly/Secure/SameSite), localStorage / sessionStorage diff |
-| **Visualization** | Auto-generated Mermaid sequence diagram, rendered inline in the app |
+| **Auth flow detection** | Login request scoring, CSRF/OAuth/OIDC/SSO indicators, JWT detection, Basic-auth detection |
+| **Snapshots & diffs** | Cookie diff (added/changed/removed + HttpOnly/Secure/SameSite), localStorage / sessionStorage diff |
+| **Visualization** | Auto-generated Mermaid sequence diagram, rendered inline |
 | **JWT inspection** | Decoded header / payload / expiry status for every JWT found in cookies, headers, storage, or response bodies |
-| **Report export** | Markdown (with diagram), JSON, curl & fetch snippets |
+| **Discovered endpoints** | Path-pattern grouping (e.g. `/users/:id`), per-method × per-status counts, copy as curl |
+| **Report exports** | Markdown (with diagram), JSON, Postman v2.1 collection, curl & fetch snippets |
+| **Replay sandbox** | Re-issue captured requests in dry-run or live mode with strict per-session quotas (off by default) |
 | **Compact mode** | Filter timeline & request list to auth-relevant events only |
 | **i18n** | English & Korean UI (auto-detected, switchable in Settings) |
 
----
-
-## Example flow
+### Example diagram
 
 ```mermaid
 sequenceDiagram
@@ -50,83 +47,68 @@ Profile API->>Browser: User Session
 
 ---
 
-## Requirements
-
-| Component | Minimum | Used for |
-|---|---|---|
-| Node.js | **18+** (20+ recommended) | UI build, sidecar, tests |
-| npm | 9+ | dependency management |
-| Rust toolchain | stable | desktop (Tauri) build only |
-| Playwright Chromium | downloaded via `npx playwright install chromium` | real capture mode |
-| OS | macOS / Linux / Windows | desktop builds |
-
-> **Tauri prerequisites** (Rust + webview deps) — see
-> [`tauri.app/v1/guides/getting-started/prerequisites`](https://tauri.app/v1/guides/getting-started/prerequisites).
-
----
-
-## Getting started
+## Quick start
 
 ```sh
 git clone <repo>
 cd authlens
 npm install
-npx playwright install chromium     # required for real capture
+npx playwright install chromium    # required for real capture
 ```
 
-### Run as a desktop app (real capture)
+### Desktop app (real capture)
 
 ```sh
 npm run tauri:dev
 ```
 
 A separate Chromium window opens when you click **Start Capture**. Sign in
-normally — AuthLens records the network traffic from the Rust backend via a
-Node sidecar that drives Playwright. Click **Stop Capture** to analyze.
+normally — AuthLens records network traffic via a Node sidecar that drives
+Playwright. Click **Stop Capture** to analyze.
 
-### Run as a browser preview (UI only, simulated capture)
+### Browser preview (UI only, simulated capture)
 
 ```sh
-npm run dev          # http://localhost:5173
+npm run dev      # http://localhost:5173
 ```
 
-Useful for working on the UI. The Capture screen runs a small *simulated*
-network feed because the Playwright backend is only available inside the Tauri
-shell.
+The Capture screen uses a small simulated network feed; real Playwright
+capture is only available inside the Tauri shell.
 
 ### Tests / lint / build
 
 ```sh
 npm run lint
 npm test
-npm run build         # tsc --noEmit + vite build
+npm run build    # tsc --noEmit + vite build
 ```
 
 ---
 
 ## How capture works
 
-1. You enter a target URL in AuthLens.
-2. (Desktop build) AuthLens spawns a Playwright Chromium browser as a
-   separate window via a Node sidecar (`sidecar/recorder.mjs`).
+1. Enter a target URL in AuthLens.
+2. **(Desktop)** AuthLens spawns a Playwright Chromium browser as a separate
+   window via the Node sidecar at `sidecar/recorder.mjs`.
 3. You complete the login flow manually in that window. **AuthLens never
    automates the login.**
 4. The sidecar streams every request, response header, response body preview,
    cookie change, and storage change back to the React UI as NDJSON over
    stdout → Tauri events.
-5. You click **Stop Capture**. AuthLens runs the analyzer pipeline:
+5. Click **Stop Capture**. The analyzer runs:
    - Login request scoring (URL keyword, method, body shape, follow-up calls)
-   - Auth type inference (Cookie session / JWT / OAuth / OIDC / SSO)
+   - Auth type inference (Cookie session / JWT / OAuth / OIDC / SSO / Basic)
    - Cookie & storage diff
    - JWT decoding (header / payload / expiry)
+   - Discovered-endpoint grouping with status-code histogram
    - Mermaid sequence diagram generation
-6. The Analysis tab shows the diagram + summary cards + collapsible details.
-7. The Report tab renders the Markdown documentation and lets you export
-   (`.md` / `.json`).
+6. **Analysis** tab shows the diagram + summary cards + collapsible details.
+7. **Report** tab renders Markdown documentation and exports
+   (`.md` / `.json` / Postman collection).
 
 ---
 
-## Safety & client-side constraints
+## Safety & sensitive value handling
 
 AuthLens is conservative by design — see [`SECURITY.md`](./SECURITY.md) for
 the full policy.
@@ -134,100 +116,109 @@ the full policy.
 ### What AuthLens never does
 
 - Automated login, brute force, credential stuffing
-- CAPTCHA bypass, fingerprint bypass, MFA bypass
+- CAPTCHA / fingerprint / MFA bypass
 - Session hijacking, mass account login automation
 - Vulnerability-exploit payload execution
 - Unauthorized service scanning
 
-### Sensitive value handling
+### Raw values
 
-- **Raw tokens / passwords / cookies are never persisted to local storage.**
-  They live in session memory while the app is open and are stripped
-  (`stripRaw`) before any save to SQLite or the in-memory store. The Recent
-  Sessions list never holds raw secrets.
-- The UI shows **masked values by default**. The Settings toggle
-  "Reveal raw values by default" only controls whether the Report screen's
-  rendered preview shows raw — it does *not* change persistence.
-- Markdown / JSON / curl / fetch exports are **masked by default**. A
-  per-export "Include raw values" checkbox surfaces a visible warning when on.
+- **Raw tokens / passwords / cookies are never persisted to disk.** They live
+  in session memory while the app is open and are stripped (`stripRaw`)
+  before any save to SQLite or the in-memory store. The Recent Sessions list
+  never holds raw secrets.
+- The UI shows **masked values by default**. The Settings toggle "Reveal raw
+  values by default" only controls the Report preview's rendering — it does
+  *not* change persistence.
+- Markdown / JSON / curl / fetch / Postman exports are **masked by default**.
+  A per-export "Include raw values" checkbox shows a visible warning when on.
 - Replay sandbox and raw export are **off by default** and must be enabled
   per session.
+
+### Replay sandbox limits
+
+- 1.5 s cooldown between sends
+- 10 sends per capture session (hard cap)
+- Max 5 redirects, max 256 KB response body
+- HTTP/HTTPS only (no file://, no custom schemes)
+- Per-host authorization checkbox required for live mode
 
 ### Capture limits
 
 - Response body preview is capped (default 8 KB, configurable in Settings).
 - Binary response bodies (image, video, font, application/octet-stream, …)
-  are excluded from capture.
+  are excluded.
 - Sidecar finalization steps have timeouts so a wedged or closed browser
   cannot block analysis.
 
-### Sidecar environment
-
-The Playwright sidecar (`sidecar/recorder.mjs`) requires a system Node
-runtime; it is not bundled. In production builds it is shipped as a Tauri
-resource (`tauri.bundle.resources`) but Node + the Playwright module from
-`node_modules` are expected on the user's machine.
-
 ---
 
-## Architecture (short)
+## Architecture
 
 ```text
 src/
-  core/        types, masking policy, JWT decoder, constants
-  recorder/    Playwright adapter + in-memory recorder
-  analyzer/    scoring, diff, auth-type inference, noteworthy filter
-  reporter/    markdown / mermaid / JSON / curl / fetch generators
-  storage/     SessionStore (in-memory + SQLite) — strips raw on save
-  ui/          React UI: Home / Capture / Analysis / Report / Settings
-sidecar/       Node Playwright sidecar (NDJSON streaming)
-src-tauri/     Rust shell: spawns sidecar, forwards events
+  core/          types, masking policy, JWT decoder, constants
+  recorder/      Playwright adapter + in-memory recorder
+  analyzer/      scoring, diff, auth-type inference, noteworthy filter,
+                 discovered-endpoint grouping
+  reporter/      markdown / mermaid / JSON / curl / fetch / Postman generators
+  storage/       SessionStore (in-memory + SQLite) — strips raw on save
+  ui/            React UI: Home / Capture / Analysis / Report / Settings
+sidecar/         Node Playwright sidecar (NDJSON streaming over stdout)
+src-tauri/       Rust shell: spawns sidecar, forwards events, replay sandbox
+tests/           Vitest suites (analyzer / reporter / storage / UI helpers)
 ```
 
-Tests live alongside source under `tests/`.
+Live request/response events from the sidecar are batched per animation
+frame before they touch React state, so a chatty target site can't starve
+click handling on the Stop button.
 
 ---
 
-## Intended use
+## Requirements
 
-AuthLens is intended for:
+| Component | Minimum | Used for |
+|---|---|---|
+| Node.js | **18+** (20+ recommended) | UI build, sidecar, tests |
+| npm | 9+ | dependency management |
+| Rust toolchain | stable | desktop (Tauri) build only |
+| Playwright Chromium | `npx playwright install chromium` | real capture mode |
+| OS | macOS / Linux / Windows | desktop builds |
 
-- authorized security testing
-- internal API debugging
-- authentication flow visualization
-- QA and development workflows
-- legacy system analysis
+> **Tauri prerequisites** (Rust + webview deps) — see
+> [tauri.app/v1/guides/getting-started/prerequisites](https://tauri.app/v1/guides/getting-started/prerequisites).
 
-Unauthorized use against third-party services may violate laws or terms of
-service.
+### Sidecar runtime
+
+The Playwright sidecar (`sidecar/recorder.mjs`) needs a system Node runtime;
+it is not bundled. In production builds it ships as a Tauri resource
+(`tauri.bundle.resources`) but Node + Playwright from `node_modules` are
+expected on the user's machine.
 
 ---
 
 ## Tech stack
 
-- **Tauri** (Rust shell, native window, sidecar IPC)
-- **React 18** + **TypeScript** (UI)
-- **Vite** (dev server + bundler)
+- **Tauri** (Rust shell, native window, sidecar IPC, replay sandbox)
+- **React 18** + **TypeScript** + **Vite** (UI)
 - **Playwright** (headful Chromium capture, via Node sidecar)
 - **SQLite** (`better-sqlite3`) — local capture history (raw values stripped
   before save)
-- **react-i18next** (English / Korean)
+- **react-i18next** (English / Korean, parity-checked)
 - **marked** + **mermaid** (Report preview)
 
 ---
 
-## Philosophy
+## Intended use
 
-AuthLens is **not** a penetration testing tool. The goal is to improve:
+- Authorized security testing
+- Internal API debugging
+- Authentication flow visualization
+- QA and development workflows
+- Legacy system analysis
 
-- developer experience
-- authentication observability
-- internal documentation
-- QA productivity
-- system understanding
-
-The tool focuses on observation and documentation. Anything that would
-require attacking or impersonating a system is explicitly out of scope.
+Unauthorized use against third-party services may violate laws or terms of
+service.
 
 ---
 
