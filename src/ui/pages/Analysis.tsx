@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import {
   analyzeLoginCredentials,
@@ -28,7 +28,14 @@ import {
   type ResourceGroup,
 } from '@/analyzer';
 import { stringifyPostmanCollection, toCurlCommand } from '@/reporter';
-import type { RequestRecord, ResponseRecord } from '@/core';
+import type {
+  CookieDiff,
+  CookieSnapshot,
+  RequestRecord,
+  ResponseRecord,
+  StorageDiff,
+  StorageEntry,
+} from '@/core';
 import { downloadFile } from '../util/download.js';
 import { ReplayModal } from '../components/ReplayModal.js';
 import { generateMermaidDiagram } from '@/reporter';
@@ -275,6 +282,28 @@ export function AnalysisPage() {
         );
       })()}
 
+      {cookieDiff && totalCookieChanges(cookieDiff) > 0 && (
+        <details className="disclosure">
+          <summary>
+            <span className="disclosure__title">{t('analysis.cardCookieChanges')}</span>
+            <span className="muted text-xs">
+              +{cookieDiff.added.length} / ~{cookieDiff.changed.length} / -{cookieDiff.removed.length}
+            </span>
+          </summary>
+          <CookieDiffCard diff={cookieDiff} showRaw={showRaw} />
+        </details>
+      )}
+
+      {storageDiff && totalStorageChanges(storageDiff) > 0 && (
+        <details className="disclosure">
+          <summary>
+            <span className="disclosure__title">{t('analysis.cardStorageChanges')}</span>
+            <span className="muted text-xs">{storageDiffSummary(storageDiff)}</span>
+          </summary>
+          <StorageDiffCard diff={storageDiff} showRaw={showRaw} />
+        </details>
+      )}
+
       {summary && summary.warnings.length > 0 && (
         <div className="card">
           <h2 className="card__title">{t('analysis.securityNotes')}</h2>
@@ -472,6 +501,217 @@ function statusClass(status: number): 'success' | 'info' | 'warning' | 'danger' 
   if (status >= 300) return 'info';
   if (status >= 200) return 'success';
   return 'info';
+}
+
+function totalCookieChanges(d: CookieDiff): number {
+  return d.added.length + d.changed.length + d.removed.length;
+}
+
+function totalStorageChanges(d: StorageDiff): number {
+  return (
+    d.localStorage.added.length +
+    d.localStorage.changed.length +
+    d.localStorage.removed.length +
+    d.sessionStorage.added.length +
+    d.sessionStorage.changed.length +
+    d.sessionStorage.removed.length
+  );
+}
+
+function storageDiffSummary(d: StorageDiff): string {
+  const ls = d.localStorage.added.length + d.localStorage.changed.length + d.localStorage.removed.length;
+  const ss = d.sessionStorage.added.length + d.sessionStorage.changed.length + d.sessionStorage.removed.length;
+  return `local: ${ls} · session: ${ss}`;
+}
+
+function cookieFlags(c: { httpOnly: boolean; secure: boolean; sameSite?: string }): string[] {
+  const flags: string[] = [];
+  if (c.httpOnly) flags.push('HttpOnly');
+  if (c.secure) flags.push('Secure');
+  if (c.sameSite) flags.push(`SameSite=${c.sameSite}`);
+  return flags;
+}
+
+function CookieDiffCard({ diff, showRaw }: { diff: CookieDiff; showRaw: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <div className="stack" style={{ gap: 'var(--space-4)', marginTop: 'var(--space-3)' }}>
+      {diff.added.length > 0 && (
+        <DiffGroup label={t('analysis.addedLabel')}>
+          {diff.added.map((c, i) => (
+            <CookieRow key={`a-${c.name}-${i}`} cookie={c} showRaw={showRaw} />
+          ))}
+        </DiffGroup>
+      )}
+      {diff.changed.length > 0 && (
+        <DiffGroup label={t('analysis.changedLabel')}>
+          {diff.changed.map((c, i) => (
+            <CookieChangedRow key={`c-${c.after.name}-${i}`} before={c.before} after={c.after} showRaw={showRaw} />
+          ))}
+        </DiffGroup>
+      )}
+      {diff.removed.length > 0 && (
+        <DiffGroup label={t('analysis.removedLabel')}>
+          {diff.removed.map((c, i) => (
+            <CookieRow key={`r-${c.name}-${i}`} cookie={c} showRaw={showRaw} removed />
+          ))}
+        </DiffGroup>
+      )}
+    </div>
+  );
+}
+
+function CookieRow({
+  cookie,
+  showRaw,
+  removed,
+}: {
+  cookie: CookieSnapshot;
+  showRaw: boolean;
+  removed?: boolean;
+}) {
+  const flags = cookieFlags(cookie);
+  return (
+    <div className="kv-row">
+      <code className="kv-row__key">{cookie.name}</code>
+      <span className="muted text-xs">@ {cookie.domain}{cookie.path}</span>
+      {!removed && <code className="kv-row__value">{displaySensitive(cookie.value, showRaw)}</code>}
+      {flags.length > 0 && (
+        <span className="badge-row">
+          {flags.map((f) => (
+            <span key={f} className="badge badge--info">{f}</span>
+          ))}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function CookieChangedRow({
+  before,
+  after,
+  showRaw,
+}: {
+  before: CookieSnapshot;
+  after: CookieSnapshot;
+  showRaw: boolean;
+}) {
+  const flags = cookieFlags(after);
+  return (
+    <div className="kv-row">
+      <code className="kv-row__key">{after.name}</code>
+      <span className="muted text-xs">@ {after.domain}{after.path}</span>
+      <code className="kv-row__value muted">{displaySensitive(before.value, showRaw)}</code>
+      <span className="muted">→</span>
+      <code className="kv-row__value">{displaySensitive(after.value, showRaw)}</code>
+      {flags.length > 0 && (
+        <span className="badge-row">
+          {flags.map((f) => (
+            <span key={f} className="badge badge--info">{f}</span>
+          ))}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function StorageDiffCard({ diff, showRaw }: { diff: StorageDiff; showRaw: boolean }) {
+  return (
+    <div className="stack" style={{ gap: 'var(--space-4)', marginTop: 'var(--space-3)' }}>
+      <StorageSection title="localStorage" diff={diff.localStorage} showRaw={showRaw} />
+      <StorageSection title="sessionStorage" diff={diff.sessionStorage} showRaw={showRaw} />
+    </div>
+  );
+}
+
+function StorageSection({
+  title,
+  diff,
+  showRaw,
+}: {
+  title: string;
+  diff: StorageDiff['localStorage'];
+  showRaw: boolean;
+}) {
+  const { t } = useTranslation();
+  const total = diff.added.length + diff.changed.length + diff.removed.length;
+  if (total === 0) return null;
+  return (
+    <div className="stack" style={{ gap: 'var(--space-2)' }}>
+      <h3 className="card__title" style={{ fontSize: 'var(--font-sm)' }}>{title}</h3>
+      {diff.added.length > 0 && (
+        <DiffGroup label={t('analysis.addedLabel')}>
+          {diff.added.map((e, i) => (
+            <StorageRow key={`a-${e.key}-${i}`} entry={e} showRaw={showRaw} />
+          ))}
+        </DiffGroup>
+      )}
+      {diff.changed.length > 0 && (
+        <DiffGroup label={t('analysis.changedLabel')}>
+          {diff.changed.map((c, i) => (
+            <StorageChangedRow
+              key={`c-${c.after.key}-${i}`}
+              before={c.before}
+              after={c.after}
+              showRaw={showRaw}
+            />
+          ))}
+        </DiffGroup>
+      )}
+      {diff.removed.length > 0 && (
+        <DiffGroup label={t('analysis.removedLabel')}>
+          {diff.removed.map((e, i) => (
+            <StorageRow key={`r-${e.key}-${i}`} entry={e} showRaw={showRaw} removed />
+          ))}
+        </DiffGroup>
+      )}
+    </div>
+  );
+}
+
+function StorageRow({
+  entry,
+  showRaw,
+  removed,
+}: {
+  entry: StorageEntry;
+  showRaw: boolean;
+  removed?: boolean;
+}) {
+  return (
+    <div className="kv-row">
+      <code className="kv-row__key">{entry.key}</code>
+      {!removed && <code className="kv-row__value">{displaySensitive(entry.value, showRaw)}</code>}
+    </div>
+  );
+}
+
+function StorageChangedRow({
+  before,
+  after,
+  showRaw,
+}: {
+  before: StorageEntry;
+  after: StorageEntry;
+  showRaw: boolean;
+}) {
+  return (
+    <div className="kv-row">
+      <code className="kv-row__key">{after.key}</code>
+      <code className="kv-row__value muted">{displaySensitive(before.value, showRaw)}</code>
+      <span className="muted">→</span>
+      <code className="kv-row__value">{displaySensitive(after.value, showRaw)}</code>
+    </div>
+  );
+}
+
+function DiffGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="stack" style={{ gap: 'var(--space-2)' }}>
+      <div className="text-xs muted" style={{ fontWeight: 600 }}>{label}</div>
+      <div className="stack" style={{ gap: 'var(--space-1)' }}>{children}</div>
+    </div>
+  );
 }
 
 function methodClass(m: string): string {
