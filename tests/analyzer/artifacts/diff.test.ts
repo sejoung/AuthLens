@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { toSensitiveValue } from '@/core';
-import { diffCookies, diffStorage } from '@/analyzer/diff';
-import { makeCookie } from './test-helpers.js';
+import { diffCookies, diffStorage } from '@/analyzer/artifacts/diff';
+import { makeCookie } from '../test-helpers.js';
 
 describe('diffCookies', () => {
   it('detects added cookies', () => {

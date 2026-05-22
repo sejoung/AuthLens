@@ -6,11 +6,11 @@ import type {
   ResponseRecord,
   StorageSnapshot,
 } from '@/core';
-import { rankLoginCandidates } from './login-scoring.js';
-import { diffCookies, diffStorage } from './diff.js';
-import { inferAuthType, toFlowSummary } from './auth-type.js';
+import { rankLoginCandidates } from './login/scoring.js';
+import { diffCookies, diffStorage } from './artifacts/diff.js';
+import { inferAuthType, toFlowSummary } from './auth-type/detect.js';
 import { buildAuthEvents, buildAuthSteps } from './events.js';
-import { extractRedirects } from './redirects.js';
+import { extractRedirects } from './artifacts/redirects.js';
 
 export type AnalyzeInput = {
   id?: string;

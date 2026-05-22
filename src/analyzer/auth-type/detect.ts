@@ -10,8 +10,8 @@ import type {
   SecurityNote,
   StorageDiff,
 } from '@/core';
-import { authScheme, findAuthorizationHeader } from './auth-headers.js';
-import { looksLikeAuthorizeRequest, looksLikeTokenRequest } from './oauth-flow.js';
+import { authScheme, findAuthorizationHeader } from './headers.js';
+import { looksLikeAuthorizeRequest, looksLikeTokenRequest } from './oauth.js';
 
 export type InferenceInput = {
   requests: RequestRecord[];

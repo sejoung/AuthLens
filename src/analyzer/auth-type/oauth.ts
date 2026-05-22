@@ -9,7 +9,7 @@
  */
 
 import { looksLikeJwt, type AuthFlow } from '@/core';
-import { authScheme, decodeBasicUsername, findAuthorizationHeader } from './auth-headers.js';
+import { authScheme, decodeBasicUsername, findAuthorizationHeader } from './headers.js';
 
 export type OAuthAuthorizeRequest = {
   requestId: string;

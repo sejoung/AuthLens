@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findLogoutEndpoints } from '@/analyzer/logout';
+import { findLogoutEndpoints } from '@/analyzer/login/logout';
 import { maskHeaders, type AuthFlow } from '@/core';
 
 function flowOf(

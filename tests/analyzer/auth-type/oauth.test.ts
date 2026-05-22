@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findOAuthFlow } from '@/analyzer/oauth-flow';
+import { findOAuthFlow } from '@/analyzer/auth-type/oauth';
 import { toSensitiveValue, maskHeaders, type AuthFlow } from '@/core';
 
 function flowOf(overrides: Partial<AuthFlow>): AuthFlow {

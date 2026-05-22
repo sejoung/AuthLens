@@ -15,7 +15,7 @@ import {
   decodeBasicCredentials,
   decodeBasicUsername,
   findAuthorizationHeader,
-} from './auth-headers.js';
+} from '../auth-type/headers.js';
 
 export type LoginCredentials = {
   /** Authorization 헤더 scheme (있을 때) */

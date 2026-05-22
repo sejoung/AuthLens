@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rankLoginCandidates, scoreRequest } from '@/analyzer/login-scoring';
+import { rankLoginCandidates, scoreRequest } from '@/analyzer/login/scoring';
 import {
   EMPTY_STORAGE,
   makeCookie,
@@ -7,8 +7,8 @@ import {
   makePostData,
   makeRequest,
   makeResponse,
-} from './test-helpers.js';
-import { diffCookies } from '@/analyzer/diff';
+} from '../test-helpers.js';
+import { diffCookies } from '@/analyzer/artifacts/diff';
 
 describe('scoreRequest', () => {
   it('scores POST /login with password body highly', () => {

@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { toSensitiveValue } from '@/core';
-import { inferAuthType } from '@/analyzer/auth-type';
-import { diffCookies, diffStorage } from '@/analyzer/diff';
+import { inferAuthType } from '@/analyzer/auth-type/detect';
+import { diffCookies, diffStorage } from '@/analyzer/artifacts/diff';
 import {
   EMPTY_STORAGE,
   makeCookie,
   makeHeaders,
   makeRequest,
   makeResponse,
-} from './test-helpers.js';
+} from '../test-helpers.js';
 
 describe('inferAuthType', () => {
   it('detects cookie-session', () => {

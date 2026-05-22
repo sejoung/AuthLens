@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findLoginForm } from '@/analyzer/login-form';
+import { findLoginForm } from '@/analyzer/login/form';
 import { maskHeaders, toSensitiveValue, type AuthFlow } from '@/core';
 
 function flowWithHtml(url: string, html: string): AuthFlow {

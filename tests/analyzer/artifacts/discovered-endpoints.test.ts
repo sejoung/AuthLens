@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { discoverEndpoints, normalizePath } from '@/analyzer/discovered-endpoints';
+import { discoverEndpoints, normalizePath } from '@/analyzer/artifacts/discovered-endpoints';
 import { maskHeaders, type AuthFlow, type RequestRecord } from '@/core';
 
 function makeReq(partial: Partial<RequestRecord> & { url: string }): RequestRecord {

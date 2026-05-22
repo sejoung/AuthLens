@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeLoginCredentials } from '@/analyzer/login-credentials';
+import { analyzeLoginCredentials } from '@/analyzer/login/credentials';
 import { maskBodyText, maskHeaders, toSensitiveValue } from '@/core';
-import { makeRequest } from './test-helpers.js';
+import { makeRequest } from '../test-helpers.js';
 
 describe('analyzeLoginCredentials — Authorization header', () => {
   it('decodes Basic auth username AND password (display is gated downstream)', () => {

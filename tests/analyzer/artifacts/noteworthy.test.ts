@@ -5,9 +5,9 @@ import {
   filterNoteworthyEvents,
   filterNoteworthyRequests,
   resourceGroupOf,
-} from '@/analyzer/noteworthy';
+} from '@/analyzer/artifacts/noteworthy';
 import type { AuthEvent } from '@/core';
-import { makeRequest } from './test-helpers.js';
+import { makeRequest } from '../test-helpers.js';
 
 describe('filterNoteworthyEvents', () => {
   it('keeps the first page_load but drops subsequent ones', () => {
