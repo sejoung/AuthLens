@@ -30,6 +30,7 @@ import {
 import { stringifyPostmanCollection, toCurlCommand } from '@/reporter';
 import type { RequestRecord, ResponseRecord } from '@/core';
 import { downloadFile } from '../util/download.js';
+import { ReplayModal } from '../components/ReplayModal.js';
 import { generateMermaidDiagram } from '@/reporter';
 import { store, useAppState } from '../state/store.js';
 import { MermaidDiagram } from '../components/MermaidDiagram.js';
@@ -223,7 +224,12 @@ export function AnalysisPage() {
               })}
             </span>
           </summary>
-          <DiscoveredEndpointsCard flow={flow} endpoints={endpoints} showRaw={showRaw} />
+          <DiscoveredEndpointsCard
+            flow={flow}
+            endpoints={endpoints}
+            showRaw={showRaw}
+            replayEnabled={state.settings.experimentalReplay}
+          />
         </details>
       )}
 
@@ -618,13 +624,16 @@ function DiscoveredEndpointsCard({
   flow,
   endpoints,
   showRaw,
+  replayEnabled,
 }: {
   flow: ReturnType<typeof useAppState>['activeFlow'];
   endpoints: DiscoveredEndpoint[];
   showRaw: boolean;
+  replayEnabled: boolean;
 }) {
   const { t } = useTranslation();
   const [copiedFor, setCopiedFor] = useState<string | undefined>();
+  const [replayReq, setReplayReq] = useState<RequestRecord | undefined>();
 
   const copyCurl = async (req: RequestRecord) => {
     const cmd = toCurlCommand(req, { includeRaw: showRaw });
@@ -690,17 +699,33 @@ function DiscoveredEndpointsCard({
                 </td>
                 <td className="col-resource muted text-xs">{statusText || '—'}</td>
                 <td className="col-actions">
-                  <button className="btn btn--secondary" onClick={() => copyCurl(e.example)}>
-                    {copiedFor === e.example.id
-                      ? t('common.copied')
-                      : t('analysis.copyCurl')}
-                  </button>
+                  <div className="row" style={{ gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
+                    <button className="btn btn--secondary" onClick={() => copyCurl(e.example)}>
+                      {copiedFor === e.example.id ? t('common.copied') : t('analysis.copyCurl')}
+                    </button>
+                    {replayEnabled && (
+                      <button
+                        className="btn btn--secondary"
+                        onClick={() => setReplayReq(e.example)}
+                        title={t('replay.replayThisRequest')}
+                      >
+                        {t('replay.replay')}
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      {replayReq && (
+        <ReplayModal
+          request={replayReq}
+          showRaw={showRaw}
+          onClose={() => setReplayReq(undefined)}
+        />
+      )}
     </div>
   );
 }

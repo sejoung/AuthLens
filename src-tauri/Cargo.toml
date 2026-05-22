@@ -16,6 +16,10 @@ tauri = { version = "1.5", features = ["dialog-save"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["process", "io-util", "macros", "rt-multi-thread", "sync"] }
+# Replay sandbox: send arbitrary captured HTTP requests, bypassing webview CORS.
+# Rate limit / authorization enforced both UI-side and here (`replay::limit`).
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip", "brotli"] }
+url = "2"
 
 [features]
 default = ["custom-protocol"]

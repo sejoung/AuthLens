@@ -102,27 +102,36 @@ export function buildFlowFromCapture(raw: SidecarRawCapture): AuthFlow {
 }
 
 /**
- * 비동기·청크 처리 버전. 큰 캡처(수백 요청)에서 메인 스레드를 막지 않도록
- * 64건마다 `setTimeout(0)`로 양보한다. 모든 마스킹은 동기 작업이지만 누적되면
- * 가시적 freeze가 생긴다.
+ * 비동기·청크 처리. 큰 캡처에서 메인 스레드를 막지 않도록 자주 yield.
+ *
+ * Yield 전략 (각각의 트레이드오프):
+ *   - `scheduler.yield()` — 모던 Chromium 한정 (Tauri WKWebView/WebView2 모두 미지원
+ *     가능성). 있으면 가장 부드러움.
+ *   - `requestAnimationFrame` — 화면 refresh와 동기화 (~16ms). 시각적으로 자연스럽지만
+ *     실제 작업 진행이 느려짐.
+ *   - `setTimeout(0)` — 최소 4ms. 항상 동작. 기본 fallback.
+ *
+ * 본 구현은 가능하면 scheduler.yield, 없으면 setTimeout(0).
  */
 export async function buildFlowFromCaptureAsync(
   raw: SidecarRawCapture,
 ): Promise<AuthFlow> {
-  const yield_ = () => new Promise<void>((r) => setTimeout(r, 0));
-  const CHUNK = 64;
+  const yield_ = makeYielder();
+  const CHUNK = 32;
 
   const requests = [];
   for (let i = 0; i < raw.requests.length; i++) {
     requests.push(toRequestRecord(raw.requests[i]!));
     if (i > 0 && i % CHUNK === 0) await yield_();
   }
+  await yield_();
 
   const responses = [];
   for (let i = 0; i < raw.responses.length; i++) {
     responses.push(toResponseRecord(raw.responses[i]!));
     if (i > 0 && i % CHUNK === 0) await yield_();
   }
+  await yield_();
 
   const cookiesBefore = raw.cookiesBefore.map(toCookieSnapshot);
   const cookiesAfter = raw.cookiesAfter.map(toCookieSnapshot);
@@ -132,7 +141,9 @@ export async function buildFlowFromCaptureAsync(
   };
 
   await yield_();
-  return analyze({
+  // analyze()는 동기지만 위 단계에서 충분히 yield했으니 여기서 잠시 양보 후 실행.
+  // 실제 운영 캡처에서 가장 무거운 부분이 마스킹(요청/응답 루프)이라 여기까진 끝남.
+  const flow = analyze({
     targetUrl: raw.target,
     startedAt: raw.startedAt,
     endedAt: raw.endedAt,
@@ -143,4 +154,15 @@ export async function buildFlowFromCaptureAsync(
     storageBefore: { localStorage: [], sessionStorage: [] },
     storageAfter,
   });
+  await yield_();
+  return flow;
+}
+
+function makeYielder(): () => Promise<void> {
+  // scheduler.yield is a TC39 proposal; not in standard types yet.
+  const sched = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
+  if (sched?.yield) {
+    return () => sched.yield!();
+  }
+  return () => new Promise<void>((r) => setTimeout(r, 0));
 }

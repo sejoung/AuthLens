@@ -122,3 +122,36 @@ export async function saveTextFileViaTauri(
   const result = await invoke<string | null>('save_text_file', { content, options });
   return result;
 }
+
+export type ReplayInput = {
+  method: string;
+  url: string;
+  headers: Array<[string, string]>;
+  body?: string;
+};
+
+export type ReplayResponse = {
+  status: number;
+  statusText: string;
+  headers: Array<[string, string]>;
+  body: string;
+  bodyTruncated: boolean;
+  durationMs: number;
+  finalUrl: string;
+};
+
+export type ReplayQuota = {
+  remaining: number;
+  cap: number;
+  cooldownMs: number;
+};
+
+export async function replaySend(input: ReplayInput): Promise<ReplayResponse> {
+  const { invoke } = await import('@tauri-apps/api/tauri');
+  return invoke<ReplayResponse>('replay_send', { input });
+}
+
+export async function replayQuota(): Promise<ReplayQuota> {
+  const { invoke } = await import('@tauri-apps/api/tauri');
+  return invoke<ReplayQuota>('replay_quota');
+}

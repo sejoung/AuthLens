@@ -27,6 +27,16 @@ struct RunningCapture {
     stdin: Option<ChildStdin>,
 }
 
+/// Emit a Tauri event from the main thread. Required on macOS to avoid
+/// null-ptr derefs in tao's Obj-C event callbacks when emit happens from a
+/// tokio worker thread (Tauri 1.x).
+fn emit_on_main<R: Runtime>(app: &AppHandle<R>, payload: serde_json::Value) {
+    let app2 = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let _ = app2.emit_all("capture-event", payload);
+    });
+}
+
 /// Resolve sidecar path. In dev, the Tauri working dir is `src-tauri/` so the script
 /// lives at `../sidecar/recorder.mjs`. In a bundled build we copy via
 /// `tauri.conf.json -> tauri.bundle.resources` and use the path resolver.
@@ -93,6 +103,9 @@ pub async fn start_capture<R: Runtime>(
     let stdin = child.stdin.take();
 
     // Reader task: forward stdout lines as Tauri events.
+    // CRITICAL on macOS: `emit_all` from a tokio worker thread can race with tao's
+    // Cocoa event loop and trigger null-ptr derefs inside Obj-C callbacks (Tauri 1.x
+    // bug). We marshal each event onto the main thread via `run_on_main_thread`.
     let app_handle = app.clone();
     tokio::spawn(async move {
         let mut reader = BufReader::new(stdout).lines();
@@ -110,12 +123,12 @@ pub async fn start_capture<R: Runtime>(
                                 "message": format!("non-JSON line from sidecar: {line}"),
                             })
                         });
-                    let _ = app_handle.emit_all("capture-event", value);
+                    emit_on_main(&app_handle, value);
                 }
                 Ok(None) => break,
                 Err(e) => {
-                    let _ = app_handle.emit_all(
-                        "capture-event",
+                    emit_on_main(
+                        &app_handle,
                         serde_json::json!({"type":"error","message":format!("stdout read: {e}")}),
                     );
                     break;
@@ -123,10 +136,7 @@ pub async fn start_capture<R: Runtime>(
             }
         }
         // Reader ended — notify UI.
-        let _ = app_handle.emit_all(
-            "capture-event",
-            serde_json::json!({"type":"closed"}),
-        );
+        emit_on_main(&app_handle, serde_json::json!({"type":"closed"}));
     });
 
     // Stderr forwarder: surface as error events (don't kill capture though).
@@ -139,8 +149,8 @@ pub async fn start_capture<R: Runtime>(
                 if line.is_empty() {
                     continue;
                 }
-                let _ = app_handle.emit_all(
-                    "capture-event",
+                emit_on_main(
+                    &app_handle,
                     serde_json::json!({"type":"stderr","message":line}),
                 );
             }
