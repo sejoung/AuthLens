@@ -157,21 +157,55 @@ the full policy.
 
 ```text
 src/
-  core/          types, masking policy, JWT decoder, constants
-  recorder/      Playwright adapter + in-memory recorder
-  analyzer/      scoring, diff, auth-type inference, noteworthy filter,
-                 discovered-endpoint grouping
-  reporter/      markdown / mermaid / JSON / curl / fetch / Postman generators
-  storage/       SessionStore (in-memory + SQLite) — strips raw on save
-  ui/            React UI: Home / Capture / Analysis / Report / Settings
-sidecar/         Node Playwright sidecar (NDJSON streaming over stdout)
-src-tauri/       Rust shell: spawns sidecar, forwards events, replay sandbox
-tests/           Vitest suites (analyzer / reporter / storage / UI helpers)
+  core/             types, masking policy, JWT decoder, constants
+  recorder/         Playwright adapter + in-memory recorder
+  analyzer/         pipeline entry + 3 cohesive groups (see below)
+  reporter/         markdown / mermaid / JSON / curl / fetch / Postman generators
+  storage/          SessionStore (in-memory + SQLite) — strips raw on save
+  ui/               React UI: Home / Capture / Analysis / Report / Settings
+sidecar/            Node Playwright sidecar (NDJSON streaming over stdout)
+src-tauri/          Rust shell: spawns sidecar, forwards events, replay sandbox
+tests/              Vitest suites — mirrors src/ layout
 ```
+
+Every top-level module exposes a barrel `index.ts`; callers import from
+`@/analyzer`, `@/core`, etc. and never reach into individual files. The UI
+entry point is `src/ui/main.tsx` (Vite convention).
+
+### Inside `src/analyzer/`
+
+```text
+analyzer/
+  index.ts                # public barrel — re-exports the groups below
+  analyze.ts              # pipeline entry
+  events.ts               # shared event/step types
+
+  login/                  # login detection
+    scoring.ts            # request scoring
+    form.ts               # HTML <form> parsing
+    credentials.ts        # Basic/Bearer credential extraction
+    logout.ts
+
+  auth-type/              # auth scheme inference
+    detect.ts             # cookie-session / JWT / OAuth / OIDC / SSO / Basic
+    headers.ts            # Authorization header parsing
+    oauth.ts              # OAuth/OIDC flow recognition
+    jwt-locations.ts      # find JWTs across cookies / headers / storage / bodies
+
+  artifacts/              # captured artifacts & secondary outputs
+    diff.ts               # cookie + storage diff
+    discovered-endpoints.ts
+    redirects.ts
+    noteworthy.ts         # filter noisy events
+    raw-presence.ts
+```
+
+### Performance notes
 
 Live request/response events from the sidecar are batched per animation
 frame before they touch React state, so a chatty target site can't starve
-click handling on the Stop button.
+click handling on the Stop button. The live request table is also capped
+at 1000 rows (counters keep the true total).
 
 ---
 
